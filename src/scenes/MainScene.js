@@ -30,18 +30,13 @@ class MainScene extends Phaser.Scene {
     // Create a simple enemy sprite as a rectangle (for prototype)
     const enemyGraphics = this.make.graphics({ x: 0, y: 0, add: false });
     
-    // Draw filled rectangle with border for better visibility
-    enemyGraphics.fillStyle(0x663931); // Brown color to match with description
+    // Use a lighter brown color to make the burgundy tint more noticeable
+    enemyGraphics.fillStyle(0x8B7355); // Lighter brown color
     enemyGraphics.fillRect(0, 0, 32, 16); // Two horizontal blocks (16px each)
     
-    // Add a black outline 
+    // Add a black outline for visibility
     enemyGraphics.lineStyle(1, 0x000000);
     enemyGraphics.strokeRect(0, 0, 32, 16);
-    
-    // Add some distinguishing details to make it look enemy-like
-    enemyGraphics.fillStyle(0xFFFFFF);
-    enemyGraphics.fillCircle(8, 8, 2);  // Left eye
-    enemyGraphics.fillCircle(24, 8, 2); // Right eye
     
     enemyGraphics.generateTexture('enemy', 32, 16);
   }
@@ -323,13 +318,25 @@ class MainScene extends Phaser.Scene {
     
     enemyPositions.forEach(pos => {
       const enemy = this.enemies.create(pos.x, pos.y, 'enemy');
+      
+      // Set the origin to 0.5 to ensure it's centered properly
+      enemy.setOrigin(0.5, 0.5);
+      
+      // Make sure it doesn't move with physics
       enemy.setImmovable(true);
+      
+      // Store data on the enemy sprite
       enemy.setData('id', pos.id);
       enemy.setData('isEnemy', true);
       enemy.setData('originalTint', enemy.tint);
       
-      // Make enemy slightly transparent to distinguish it
-      enemy.setAlpha(0.8);
+      // Add collision - set a physics body of 32x16
+      enemy.body.setSize(32, 16);
+      
+      // Debug outline to see the actual collision body
+      if (this.physics.config.debug) {
+        enemy.body.debugShowBody = true;
+      }
     });
     
     // Add overlap detection between player and enemies
@@ -340,6 +347,9 @@ class MainScene extends Phaser.Scene {
     if (this.playerContainer) {
       this.physics.world.enable(this.playerContainer);
       this.playerContainer.body.setSize(20, 20); // Adjust size for better collision detection
+      
+      // Add collision between player and enemies
+      this.physics.add.collider(this.playerContainer, this.enemies);
     }
   }
   
@@ -467,8 +477,16 @@ class MainScene extends Phaser.Scene {
     
     // Clean up any combat prompt
     if (this.combatPrompt) {
-      this.combatPrompt.destroy();
+      this.combatPrompt.bg.destroy();
+      this.combatPrompt.text.destroy();
       this.combatPrompt = null;
+    }
+    
+    // Also stop any pulse effect on the enemy
+    if (enemy.pulseEffect) {
+      enemy.pulseEffect.stop();
+      enemy.pulseEffect = null;
+      enemy.setAlpha(1);
     }
     
     // Set combat state
@@ -527,24 +545,59 @@ class MainScene extends Phaser.Scene {
         // console.log(`Distance to ${enemy.getData('id')}: ${distance}`);
         
         // If player is close to an enemy
-        if (distance < 24) {  // Reduced from 32 to 24 for tighter proximity detection
-          enemy.setTint(0x992222); // Burgundy color
+        if (distance < 28) {  // Adjusted for better detection
+          // Use a very noticeable dark red tint
+          enemy.setTint(0xFF0000); 
+          
+          // Add a pulsing effect for better visibility
+          if (!enemy.pulseEffect) {
+            enemy.pulseEffect = this.tweens.add({
+              targets: enemy,
+              alpha: { from: 1, to: 0.6 },
+              duration: 500,
+              yoyo: true,
+              repeat: -1
+            });
+          }
+          
           enemyNearby = true;
           
           // Show combat prompt if not already showing
           if (!this.combatPrompt) {
-            this.combatPrompt = this.add.text(
+            // Create a background for the prompt
+            const promptBg = this.add.rectangle(
               enemy.x,
-              enemy.y - 16,
-              'Press SPACE to fight!',
+              enemy.y - 20,
+              140,
+              16,
+              0x000000,
+              0.8
+            ).setOrigin(0.5);
+            promptBg.setStrokeStyle(2, 0xFF0000);
+            
+            // Add text on top
+            const promptText = this.add.text(
+              enemy.x,
+              enemy.y - 20,
+              'PRESS SPACE TO FIGHT!',
               {
                 fontFamily: '"Press Start 2P"',
                 fontSize: '6px',
-                fill: '#ffffff',
-                backgroundColor: '#000000',
-                padding: { x: 2, y: 1 }
+                fill: '#FFFFFF',
               }
             ).setOrigin(0.5);
+            
+            // Make the prompt bob up and down for attention
+            this.tweens.add({
+              targets: [promptBg, promptText],
+              y: '+=4',
+              duration: 500,
+              yoyo: true,
+              repeat: -1
+            });
+            
+            // Store both for cleanup
+            this.combatPrompt = { bg: promptBg, text: promptText };
           }
           
           // If spacebar is pressed, start combat
@@ -552,14 +605,23 @@ class MainScene extends Phaser.Scene {
             this.startCombat(enemy);
           }
         } else {
-          // If not close, reset tint
+          // If not close, reset tint and stop pulsing
           enemy.clearTint();
+          
+          // Stop pulsing effect if it exists
+          if (enemy.pulseEffect) {
+            enemy.pulseEffect.stop();
+            enemy.pulseEffect = null;
+            enemy.setAlpha(1);
+          }
         }
       });
       
       // If no enemies nearby, remove the combat prompt
       if (!enemyNearby && this.combatPrompt) {
-        this.combatPrompt.destroy();
+        // Clean up all prompt elements
+        this.combatPrompt.bg.destroy();
+        this.combatPrompt.text.destroy();
         this.combatPrompt = null;
       }
     }
