@@ -26,6 +26,12 @@ class MainScene extends Phaser.Scene {
     this.load.image('player', 'assets/player.png');
     this.load.image('tiles', 'assets/tileset.png');
     this.load.tilemapTiledJSON('map', 'assets/map.json');
+    
+    // Create a simple enemy sprite as a rectangle (for prototype)
+    const enemyGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+    enemyGraphics.fillStyle(0x663931); // Brown color to match with description
+    enemyGraphics.fillRect(0, 0, 32, 16); // Two horizontal blocks (16px each)
+    enemyGraphics.generateTexture('enemy', 32, 16);
   }
 
   create() {
@@ -49,6 +55,15 @@ class MainScene extends Phaser.Scene {
     
     // Check API health and set up message functionality
     this.setupMessagingSystem();
+    
+    // Add enemies to the scene
+    this.setupEnemies();
+    
+    // Set up combat-related listeners
+    this.setupCombatListeners();
+    
+    // Add health display
+    this.setupPlayerHealthDisplay();
   }
   
   async setupMessagingSystem() {
@@ -276,6 +291,287 @@ class MainScene extends Phaser.Scene {
     if (this.messageBoxSeparator) {
       this.messageBoxSeparator.destroy();
       this.messageBoxSeparator = null;
+    }
+  }
+  
+  setupEnemies() {
+    // Get reference to global gameState
+    const gameState = window.gameState;
+    
+    // Create an enemies group with physics
+    this.enemies = this.physics.add.group();
+    
+    // Create a few enemies positioned around the map
+    const enemyPositions = [
+      { x: 80, y: 48, id: 'enemy1' },
+      { x: 160, y: 112, id: 'enemy2' },
+      { x: 64, y: 112, id: 'enemy3' }
+    ];
+    
+    enemyPositions.forEach(pos => {
+      const enemy = this.enemies.create(pos.x, pos.y, 'enemy');
+      enemy.setImmovable(true);
+      enemy.setData('id', pos.id);
+      enemy.setData('isEnemy', true);
+      enemy.setData('originalTint', enemy.tint);
+      
+      // Make enemy slightly transparent to distinguish it
+      enemy.setAlpha(0.8);
+    });
+    
+    // Add overlap detection between player and enemies
+    this.physics.add.overlap(
+      this.playerContainer,
+      this.enemies,
+      this.handleEnemyOverlap,
+      null,
+      this
+    );
+  }
+  
+  setupCombatListeners() {
+    // Add listeners for the CombatScene events
+    this.events.on('resumeFromCombat', (data) => {
+      console.log('MainScene resumed with data:', data);
+      
+      // Update scene based on combat results
+      if (data && data.victory && data.enemyId) {
+        // Find and remove the defeated enemy
+        const defeatedEnemy = this.enemies.getChildren().find(
+          enemy => enemy.getData('id') === data.enemyId
+        );
+        
+        if (defeatedEnemy) {
+          defeatedEnemy.destroy();
+        }
+        
+        // Show victory message
+        this.showCombatResult('VICTORY!', '#88ff88');
+      } else {
+        // Show defeat message
+        this.showCombatResult('DEFEAT!', '#ff8888');
+      }
+      
+      // Update health display
+      this.updateHealthDisplay();
+    });
+  }
+  
+  setupPlayerHealthDisplay() {
+    // Get reference to global gameState
+    const gameState = window.gameState;
+    
+    // Create a health display container in the top-right corner
+    const healthContainer = this.add.container(220, 10);
+    healthContainer.setScrollFactor(0); // Fixed on screen
+    
+    // Create a background for the health display
+    const healthBg = this.add.rectangle(0, 0, 40, 16, 0x000000, 0.7);
+    healthBg.setStrokeStyle(1, 0x888888);
+    
+    // Create health icon
+    const healthIcon = this.add.text(-15, 0, '♥', {
+      fontFamily: 'Arial',
+      fontSize: '12px',
+      fill: '#ff8888'
+    }).setOrigin(0.5);
+    
+    // Create health text
+    this.healthText = this.add.text(5, 0, gameState.player.health.toString(), {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      fill: '#ffffff'
+    }).setOrigin(0, 0.5);
+    
+    // Add all elements to the container
+    healthContainer.add([healthBg, healthIcon, this.healthText]);
+  }
+  
+  updateHealthDisplay() {
+    // Get reference to global gameState
+    const gameState = window.gameState;
+    
+    // Update health text
+    if (this.healthText) {
+      this.healthText.setText(gameState.player.health.toString());
+      
+      // Change color based on health status
+      if (gameState.player.health < 30) {
+        this.healthText.setFill('#ff8888');
+      } else if (gameState.player.health < 60) {
+        this.healthText.setFill('#ffff88');
+      } else {
+        this.healthText.setFill('#88ff88');
+      }
+    }
+    
+    // Check damaged body parts and update player appearance if needed
+    const damagedParts = gameState.player.bodyParts.filter(part => part.status === 'damaged');
+    if (damagedParts.length > 0) {
+      // For now, just tint the player red to indicate damage
+      // In a full implementation, you could change sprites or animations
+      if (this.player) {
+        this.player.setTint(0xff8888);
+      }
+    }
+  }
+  
+  showCombatResult(resultText, color) {
+    // Create a text displaying the combat result
+    const resultDisplay = this.add.text(
+      120, 
+      80, 
+      resultText, 
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '16px',
+        fill: color,
+        stroke: '#000000',
+        strokeThickness: 4,
+        shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 2, stroke: true, fill: true }
+      }
+    ).setOrigin(0.5);
+    resultDisplay.setScrollFactor(0);
+    
+    // Add a simple animation
+    this.tweens.add({
+      targets: resultDisplay,
+      scale: { from: 2, to: 1 },
+      alpha: { from: 1, to: 0 },
+      y: { from: 70, to: 60 },
+      duration: 1500,
+      ease: 'Power2',
+      onComplete: () => resultDisplay.destroy()
+    });
+  }
+  
+  handleEnemyOverlap(player, enemy) {
+    // Get reference to global gameState
+    const gameState = window.gameState;
+    
+    // Only trigger combat if not already in combat
+    if (!gameState.combatActive) {
+      // Change enemy appearance when in range
+      enemy.setTint(0x992222); // Set to burgundy color
+      
+      // Show combat prompt if not already showing
+      if (!this.combatPrompt) {
+        this.combatPrompt = this.add.text(
+          enemy.x,
+          enemy.y - 16,
+          'Press SPACE to fight!',
+          {
+            fontFamily: '"Press Start 2P"',
+            fontSize: '6px',
+            fill: '#ffffff',
+            backgroundColor: '#000000',
+            padding: { x: 2, y: 1 }
+          }
+        ).setOrigin(0.5);
+      }
+      
+      // If spacebar is pressed, start combat
+      if (this.cursors.space && this.cursors.space.isDown) {
+        if (this.combatPrompt) {
+          this.combatPrompt.destroy();
+          this.combatPrompt = null;
+        }
+        this.startCombat(enemy);
+      }
+    }
+  }
+  
+  startCombat(enemy) {
+    // Get reference to global gameState
+    const gameState = window.gameState;
+    
+    // Set combat state
+    gameState.combatActive = true;
+    gameState.currentEnemy = {
+      id: enemy.getData('id'),
+      type: 'basic',
+      health: 50
+    };
+    
+    // Show a combat indicator (visual feedback)
+    const combatText = this.add.text(
+      enemy.x,
+      enemy.y - 20,
+      'COMBAT!',
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px',
+        fill: '#ffffff',
+        backgroundColor: '#880000',
+        padding: { x: 4, y: 2 }
+      }
+    ).setOrigin(0.5);
+    
+    // Fade out and destroy after 1 second
+    this.tweens.add({
+      targets: combatText,
+      alpha: 0,
+      y: enemy.y - 30,
+      duration: 1000,
+      onComplete: () => combatText.destroy()
+    });
+    
+    // Pause this scene and start combat scene
+    this.scene.pause();
+    this.scene.launch('CombatScene');
+  }
+  
+  update() {
+    if (!this.playerContainer || this.isMoving) return;
+    
+    // Reset enemy tints if not overlapping
+    if (this.enemies) {
+      this.enemies.getChildren().forEach(enemy => {
+        // Check distance to player
+        const distance = Phaser.Math.Distance.Between(
+          this.playerContainer.x,
+          this.playerContainer.y,
+          enemy.x,
+          enemy.y
+        );
+        
+        // If not close, reset tint and remove combat prompt
+        if (distance > 32) {
+          enemy.clearTint();
+          
+          // Remove combat prompt if it exists
+          if (this.combatPrompt) {
+            this.combatPrompt.destroy();
+            this.combatPrompt = null;
+          }
+        }
+      });
+    }
+    
+    // Handle keyboard movement
+    if (this.cursors.left.isDown) {
+      this.movePlayer('left');
+    } else if (this.cursors.right.isDown) {
+      this.movePlayer('right');
+    } else if (this.cursors.up.isDown) {
+      this.movePlayer('up');
+    } else if (this.cursors.down.isDown) {
+      this.movePlayer('down');
+    }
+    
+    // Handle joystick movement
+    if (this.joystick.isActive && this.joystick.force > 0.5) {
+      const angle = this.joystick.angle;
+      // Convert angle to direction
+      if (angle >= -Math.PI/4 && angle < Math.PI/4) {
+        this.movePlayer('right');
+      } else if (angle >= Math.PI/4 && angle < 3*Math.PI/4) {
+        this.movePlayer('down');
+      } else if (angle >= 3*Math.PI/4 || angle < -3*Math.PI/4) {
+        this.movePlayer('left');
+      } else {
+        this.movePlayer('up');
+      }
     }
   }
   

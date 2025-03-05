@@ -1,5 +1,20 @@
 import Phaser from 'phaser';
 import MainScene from './scenes/MainScene';
+import CombatScene from './scenes/CombatScene';
+
+// Global game state to share data between scenes
+const gameState = {
+  player: {
+    health: 100,
+    bodyParts: [
+      { name: 'Head', status: 'healthy' },
+      { name: 'Arm', status: 'healthy' },
+      { name: 'Leg', status: 'healthy' }
+    ]
+  },
+  currentEnemy: null,
+  combatActive: false
+};
 
 // Error handling function
 function handleError(error) {
@@ -26,7 +41,7 @@ try {
     parent: 'game-container',
     pixelArt: true, // Enable pixel art mode to prevent anti-aliasing
     backgroundColor: '#000000',
-    scene: [MainScene],
+    scene: [MainScene, CombatScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
@@ -47,8 +62,9 @@ try {
   // Initialize the game
   const game = new Phaser.Game(config);
 
-  // Add game to window for debugging
+  // Add game and gameState to window for debugging
   window.game = game;
+  window.gameState = gameState;
 } catch (error) {
   handleError(error);
 }
