@@ -32,13 +32,15 @@ class MainScene extends Phaser.Scene {
     
     // Use a lighter brown color to make the burgundy tint more noticeable
     enemyGraphics.fillStyle(0x8B7355); // Lighter brown color
-    enemyGraphics.fillRect(0, 0, 32, 16); // Two horizontal blocks (16px each)
+    
+    // Make it a single tile size for perfect alignment
+    enemyGraphics.fillRect(0, 0, this.tileSize, this.tileSize);
     
     // Add a black outline for visibility
     enemyGraphics.lineStyle(1, 0x000000);
-    enemyGraphics.strokeRect(0, 0, 32, 16);
+    enemyGraphics.strokeRect(0, 0, this.tileSize, this.tileSize);
     
-    enemyGraphics.generateTexture('enemy', 32, 16);
+    enemyGraphics.generateTexture('enemy', this.tileSize, this.tileSize);
   }
 
   create() {
@@ -309,11 +311,12 @@ class MainScene extends Phaser.Scene {
     this.enemies = this.physics.add.group();
     
     // Create a few enemies positioned around the map
-    // Make sure they're aligned to the grid (multiples of this.tileSize + half tileSize for center)
+    // Align enemies to exact tile positions, accounting for any offset
+    // This time let's use integer multiples of the tile size without any additional offset
     const enemyPositions = [
-      { x: 5 * this.tileSize + this.tileSize/2, y: 3 * this.tileSize + this.tileSize/2, id: 'enemy1' },
-      { x: 10 * this.tileSize + this.tileSize/2, y: 7 * this.tileSize + this.tileSize/2, id: 'enemy2' },
-      { x: 4 * this.tileSize + this.tileSize/2, y: 7 * this.tileSize + this.tileSize/2, id: 'enemy3' }
+      { x: 5 * this.tileSize, y: 3 * this.tileSize, id: 'enemy1' },
+      { x: 10 * this.tileSize, y: 7 * this.tileSize, id: 'enemy2' },
+      { x: 4 * this.tileSize, y: 7 * this.tileSize, id: 'enemy3' }
     ];
     
     enemyPositions.forEach(pos => {
@@ -330,8 +333,8 @@ class MainScene extends Phaser.Scene {
       enemy.setData('isEnemy', true);
       enemy.setData('originalTint', enemy.tint);
       
-      // Add collision - set a physics body of 32x16
-      enemy.body.setSize(32, 16);
+      // Add collision - set a physics body to match tile size
+      enemy.body.setSize(this.tileSize, this.tileSize);
       
       // Debug outline to see the actual collision body
       if (this.physics.config.debug) {
@@ -345,8 +348,15 @@ class MainScene extends Phaser.Scene {
     
     // Ensure the player container has a physics body for easier detection in update()
     if (this.playerContainer) {
+      // Make sure the player's physics body is set up correctly
       this.physics.world.enable(this.playerContainer);
-      this.playerContainer.body.setSize(20, 20); // Adjust size for better collision detection
+      
+      // Use a larger hitbox for better detection
+      const bodySize = this.tileSize * 1.5;
+      this.playerContainer.body.setSize(bodySize, bodySize);
+      
+      // Center the body on the player sprite
+      this.playerContainer.body.setOffset(-bodySize/2, -bodySize/2);
       
       // Add collision between player and enemies
       this.physics.add.collider(this.playerContainer, this.enemies);
@@ -469,7 +479,43 @@ class MainScene extends Phaser.Scene {
     });
   }
   
-  // We've moved enemy detection logic to the update method for more reliable checking
+  // Helper method to create the combat prompt
+  createCombatPrompt(enemy) {
+    // Create a background for the prompt
+    const promptBg = this.add.rectangle(
+      enemy.x,
+      enemy.y - 20,
+      140,
+      16,
+      0x000000,
+      0.8
+    ).setOrigin(0.5);
+    promptBg.setStrokeStyle(2, 0xFF0000);
+    
+    // Add text on top
+    const promptText = this.add.text(
+      enemy.x,
+      enemy.y - 20,
+      'PRESS SPACE TO FIGHT!',
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '6px',
+        fill: '#FFFFFF',
+      }
+    ).setOrigin(0.5);
+    
+    // Make the prompt bob up and down for attention
+    this.tweens.add({
+      targets: [promptBg, promptText],
+      y: '+=4',
+      duration: 500,
+      yoyo: true,
+      repeat: -1
+    });
+    
+    // Store both for cleanup
+    this.combatPrompt = { bg: promptBg, text: promptText };
+  }
   
   startCombat(enemy) {
     // Get reference to global gameState
@@ -528,12 +574,19 @@ class MainScene extends Phaser.Scene {
   update() {
     if (!this.playerContainer || this.isMoving) return;
     
-    // Check for enemy proximity
+    // Check for enemy proximity using physics system
     if (this.enemies && this.playerContainer) {
       let enemyNearby = false;
       
+      // Check and display player's current grid position for debugging
+      const playerTileX = Math.floor(this.playerContainer.x / this.tileSize);
+      const playerTileY = Math.floor(this.playerContainer.y / this.tileSize);
+      
+      // Show position data clearly in console
+      console.log(`Player position: (${this.playerContainer.x}, ${this.playerContainer.y}), Tile: (${playerTileX}, ${playerTileY})`);
+      
       this.enemies.getChildren().forEach(enemy => {
-        // Check distance to player
+        // Check both distance and physics overlap
         const distance = Phaser.Math.Distance.Between(
           this.playerContainer.x,
           this.playerContainer.y,
@@ -541,11 +594,21 @@ class MainScene extends Phaser.Scene {
           enemy.y
         );
         
-        // Debug output to check distances
-        // console.log(`Distance to ${enemy.getData('id')}: ${distance}`);
+        // Debug output to see all distances
+        console.log(`Distance to ${enemy.getData('id')}: ${distance}`);
         
-        // If player is close to an enemy
-        if (distance < 28) {  // Adjusted for better detection
+        // Check if bodies are overlapping or very close
+        const bodyDistance = Phaser.Math.Distance.Between(
+          this.playerContainer.body.center.x,
+          this.playerContainer.body.center.y,
+          enemy.body.center.x,
+          enemy.body.center.y
+        );
+        
+        console.log(`Body center distance to ${enemy.getData('id')}: ${bodyDistance}`);
+        
+        // If player is close to an enemy - use a larger detection radius for more reliable detection
+        if (distance < 40) {  // Increased from 28 to 40 for wider detection
           // Use a very noticeable dark red tint
           enemy.setTint(0xFF0000); 
           
@@ -564,40 +627,7 @@ class MainScene extends Phaser.Scene {
           
           // Show combat prompt if not already showing
           if (!this.combatPrompt) {
-            // Create a background for the prompt
-            const promptBg = this.add.rectangle(
-              enemy.x,
-              enemy.y - 20,
-              140,
-              16,
-              0x000000,
-              0.8
-            ).setOrigin(0.5);
-            promptBg.setStrokeStyle(2, 0xFF0000);
-            
-            // Add text on top
-            const promptText = this.add.text(
-              enemy.x,
-              enemy.y - 20,
-              'PRESS SPACE TO FIGHT!',
-              {
-                fontFamily: '"Press Start 2P"',
-                fontSize: '6px',
-                fill: '#FFFFFF',
-              }
-            ).setOrigin(0.5);
-            
-            // Make the prompt bob up and down for attention
-            this.tweens.add({
-              targets: [promptBg, promptText],
-              y: '+=4',
-              duration: 500,
-              yoyo: true,
-              repeat: -1
-            });
-            
-            // Store both for cleanup
-            this.combatPrompt = { bg: promptBg, text: promptText };
+            this.createCombatPrompt(enemy);
           }
           
           // If spacebar is pressed, start combat
