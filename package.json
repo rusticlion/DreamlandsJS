@@ -1,0 +1,31 @@
+{
+  "name": "dreamlands",
+  "version": "0.1.0",
+  "description": "Into the Dreamlands - A retro-inspired RPG",
+  "main": "src/game.js",
+  "scripts": {
+    "dev": "parcel serve src/index.html --open",
+    "build": "parcel build src/index.html",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "game",
+    "rpg",
+    "phaser",
+    "dreamlands"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "phaser": "^3.55.2",
+    "phaser3-rex-plugins": "^1.1.74"
+  },
+  "devDependencies": {
+    "parcel-bundler": "^1.12.5",
+    "parcel-plugin-static-files-copy": "^2.6.0"
+  },
+  "staticFiles": {
+    "staticPath": "public",
+    "watcherGlob": "**"
+  }
+}
