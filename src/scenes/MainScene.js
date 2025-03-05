@@ -160,6 +160,9 @@ class MainScene extends Phaser.Scene {
     // Format the message text
     let textContent = message.text;
     
+    // Calculate maximum height for message text (leave room for metadata at bottom)
+    const maxTextHeight = boxHeight - 20; 
+    
     // Create message text with retro font
     const messageText = this.add.text(
       20, 
@@ -175,34 +178,60 @@ class MainScene extends Phaser.Scene {
     );
     messageText.setScrollFactor(0);
     
-    // Add location info
+    // Calculate bottom position for metadata (add a divider line)
+    const metadataY = gameHeight - 15;
+    
+    // Add a separator line above the metadata
+    const separator = this.add.line(
+      gameWidth/2, 
+      metadataY - 5,
+      0, 
+      0, 
+      gameWidth - 40, 
+      0, 
+      0x444444
+    );
+    separator.setScrollFactor(0);
+    
+    // Add location info - pinned to bottom left
     const locationInfo = this.add.text(
-      20,
-      gameHeight - 30,
-      `Location: X:${Math.floor(message.x)}, Y:${Math.floor(message.y)}`,
+      15,
+      metadataY,
+      `LOC: ${Math.floor(message.x)},${Math.floor(message.y)}`,
       {
         fontFamily: '"Press Start 2P"',
-        fontSize: '6px',
+        fontSize: '5px',
         fill: '#88ff88'
       }
     );
     locationInfo.setScrollFactor(0);
     
-    // Add timestamp if available
+    // Add timestamp if available - pinned to bottom right
     if (message.timestamp) {
       const date = new Date(message.timestamp);
-      const timeString = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+      
+      // Format date as YYYY-MM-DD HH:MM in more compact form
+      const timeString = `${date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })} ${date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })}`;
       
       const timeText = this.add.text(
-        gameWidth - 120,
-        gameHeight - 20,
+        gameWidth - 15,
+        metadataY,
         timeString,
         {
           fontFamily: '"Press Start 2P"',
-          fontSize: '6px',
+          fontSize: '5px',
           fill: '#aaaaaa'
         }
       );
+      timeText.setOrigin(1, 0); // Align to right
       timeText.setScrollFactor(0);
       
       // Store reference
@@ -214,6 +243,7 @@ class MainScene extends Phaser.Scene {
     this.messageBoxBorder = border;
     this.messageBoxText = messageText;
     this.messageBoxLocation = locationInfo;
+    this.messageBoxSeparator = separator;
   }
   
   hideMessageBox() {
@@ -241,6 +271,11 @@ class MainScene extends Phaser.Scene {
     if (this.messageBoxTimeText) {
       this.messageBoxTimeText.destroy();
       this.messageBoxTimeText = null;
+    }
+    
+    if (this.messageBoxSeparator) {
+      this.messageBoxSeparator.destroy();
+      this.messageBoxSeparator = null;
     }
   }
   
