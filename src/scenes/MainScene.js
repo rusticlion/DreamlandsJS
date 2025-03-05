@@ -109,13 +109,88 @@ class MainScene extends Phaser.Scene {
     
     // Show message text on hover
     marker.on('pointerover', () => {
+      // Calculate message text size
+      const textContent = message.text.length > 120 
+        ? message.text.substring(0, 120) + '...' 
+        : message.text;
+      
+      // Estimate text width and height
+      const estimatedWidth = Math.min(textContent.length * 4, 120);
+      const estimatedHeight = Math.ceil(textContent.length / 30) * 10 + 10;
+      
+      // Calculate popup position to keep it on screen
+      const gameWidth = this.cameras.main.width;
+      const gameHeight = this.cameras.main.height;
+      const cameraScrollX = this.cameras.main.scrollX;
+      const cameraScrollY = this.cameras.main.scrollY;
+      
+      // Calculate screen-relative positions
+      const screenX = message.x - cameraScrollX;
+      const screenY = message.y - cameraScrollY;
+      
+      // Determine the best position for the popup
+      let popupX = message.x;
+      let popupY = message.y - 20;
+      let textX = message.x - 45;
+      let textY = message.y - 30;
+      
+      // Adjust for right edge
+      if (screenX + estimatedWidth/2 > gameWidth) {
+        popupX = message.x - (estimatedWidth/2);
+        textX = popupX - 10;
+      }
+      
+      // Adjust for left edge
+      if (screenX - estimatedWidth/2 < 0) {
+        popupX = message.x + (estimatedWidth/2);
+        textX = message.x - estimatedWidth + 20;
+      }
+      
+      // Adjust for top edge - if too close to top, show below instead
+      if (screenY - estimatedHeight < 10) {
+        popupY = message.y + estimatedHeight/2;
+        textY = message.y + 10;
+      }
+      
       // Create a small popup with the message text
-      const popup = this.add.rectangle(message.x, message.y - 20, 100, 30, 0x000000, 0.7);
-      const text = this.add.text(message.x - 45, message.y - 30, message.text, { 
-        font: '8px Arial', 
-        fill: '#ffffff',
-        wordWrap: { width: 90 }
-      });
+      const popup = this.add.rectangle(
+        popupX, 
+        popupY, 
+        estimatedWidth, 
+        estimatedHeight, 
+        0x000000, 
+        0.8
+      );
+      
+      const text = this.add.text(
+        textX, 
+        textY, 
+        textContent, 
+        { 
+          font: '8px Arial', 
+          fill: '#ffffff',
+          wordWrap: { width: estimatedWidth - 10 }
+        }
+      );
+      
+      // Add timestamp if available
+      if (message.timestamp) {
+        const date = new Date(message.timestamp);
+        const timeString = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        
+        const timeText = this.add.text(
+          textX,
+          textY + estimatedHeight - 12,
+          timeString,
+          {
+            font: '6px Arial',
+            fill: '#aaaaaa'
+          }
+        );
+        
+        // Store reference
+        marker.timeText = timeText;
+      }
       
       // Store references to destroy later
       marker.popup = popup;
@@ -127,6 +202,10 @@ class MainScene extends Phaser.Scene {
       if (marker.popup) {
         marker.popup.destroy();
         marker.text.destroy();
+        if (marker.timeText) {
+          marker.timeText.destroy();
+          marker.timeText = null;
+        }
         marker.popup = null;
         marker.text = null;
       }
@@ -158,11 +237,21 @@ class MainScene extends Phaser.Scene {
       const inputBox = this.add.rectangle(120, 90, 180, 20, 0x333333);
       inputBox.setScrollFactor(0);
       
+      // Initialize empty input text
+      let currentInput = '';
+      
       const inputText = this.add.text(40, 85, '', { 
         font: '10px Arial', 
         fill: '#ffffff' 
       });
       inputText.setScrollFactor(0);
+      
+      // Character counter
+      const charCounter = this.add.text(200, 85, '0/40', { 
+        font: '8px Arial', 
+        fill: '#aaaaaa' 
+      });
+      charCounter.setScrollFactor(0);
       
       // Instructions
       const instructions = this.add.text(40, 110, 'Press ENTER to post or ESC to cancel', { 
@@ -171,40 +260,69 @@ class MainScene extends Phaser.Scene {
       });
       instructions.setScrollFactor(0);
       
-      // Handle keyboard input
-      const keyboardInput = this.input.keyboard.on('keydown', event => {
+      // Function to update the text display
+      const updateTextDisplay = () => {
+        // Update the text display
+        inputText.setText(currentInput);
+        
+        // Update character counter
+        charCounter.setText(`${currentInput.length}/40`);
+        
+        // Change counter color when approaching limit
+        if (currentInput.length > 30) {
+          charCounter.setFill('#ff9900');
+        } else if (currentInput.length > 35) {
+          charCounter.setFill('#ff0000');
+        } else {
+          charCounter.setFill('#aaaaaa');
+        }
+      };
+      
+      // Create a listener that will be active only while the dialog is open
+      const keyboardInput = (event) => {
         if (event.keyCode === 27) { // ESC key
           // Cancel and clean up
-          overlay.destroy();
-          promptText.destroy();
-          inputBox.destroy();
-          inputText.destroy();
-          instructions.destroy();
-          this.input.keyboard.removeListener('keydown', keyboardInput);
-          this.isMoving = false;
+          cleanup();
         } else if (event.keyCode === 13) { // ENTER key
           // Post the message
-          if (inputText.text.trim() !== '') {
-            this.postMessage(inputText.text);
+          if (currentInput.trim() !== '') {
+            this.postMessage(currentInput.trim());
           }
           
           // Clean up
-          overlay.destroy();
-          promptText.destroy();
-          inputBox.destroy();
-          inputText.destroy();
-          instructions.destroy();
-          this.input.keyboard.removeListener('keydown', keyboardInput);
-          this.isMoving = false;
+          cleanup();
         } else if (event.keyCode === 8) { // BACKSPACE key
-          inputText.text = inputText.text.slice(0, -1);
+          // Remove the last character
+          currentInput = currentInput.slice(0, -1);
+          updateTextDisplay();
         } else if (event.key.length === 1) { // Regular text input
           // Limit message length
-          if (inputText.text.length < 40) {
-            inputText.text += event.key;
+          if (currentInput.length < 40) {
+            currentInput += event.key;
+            updateTextDisplay();
           }
         }
-      });
+      };
+      
+      // Function to clean up all UI elements
+      const cleanup = () => {
+        // Disable the listener first to prevent memory leaks
+        this.input.keyboard.off('keydown', keyboardInput);
+        
+        // Clean up UI elements
+        overlay.destroy();
+        promptText.destroy();
+        inputBox.destroy();
+        inputText.destroy();
+        charCounter.destroy();
+        instructions.destroy();
+        
+        // Allow movement again
+        this.isMoving = false;
+      };
+      
+      // Register the keyboard input handler
+      this.input.keyboard.on('keydown', keyboardInput);
     });
   }
   
