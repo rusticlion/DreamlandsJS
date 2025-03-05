@@ -107,111 +107,141 @@ class MainScene extends Phaser.Scene {
     // Make it interactive
     marker.setInteractive();
     
+    // Store the message data directly on the marker for easy access
+    marker.messageData = message;
+    
     // Show message text on hover
     marker.on('pointerover', () => {
-      // Calculate message text size
-      const textContent = message.text.length > 120 
-        ? message.text.substring(0, 120) + '...' 
-        : message.text;
-      
-      // Estimate text width and height
-      const estimatedWidth = Math.min(textContent.length * 4, 120);
-      const estimatedHeight = Math.ceil(textContent.length / 30) * 10 + 10;
-      
-      // Calculate popup position to keep it on screen
-      const gameWidth = this.cameras.main.width;
-      const gameHeight = this.cameras.main.height;
-      const cameraScrollX = this.cameras.main.scrollX;
-      const cameraScrollY = this.cameras.main.scrollY;
-      
-      // Calculate screen-relative positions
-      const screenX = message.x - cameraScrollX;
-      const screenY = message.y - cameraScrollY;
-      
-      // Determine the best position for the popup
-      let popupX = message.x;
-      let popupY = message.y - 20;
-      let textX = message.x - 45;
-      let textY = message.y - 30;
-      
-      // Adjust for right edge
-      if (screenX + estimatedWidth/2 > gameWidth) {
-        popupX = message.x - (estimatedWidth/2);
-        textX = popupX - 10;
-      }
-      
-      // Adjust for left edge
-      if (screenX - estimatedWidth/2 < 0) {
-        popupX = message.x + (estimatedWidth/2);
-        textX = message.x - estimatedWidth + 20;
-      }
-      
-      // Adjust for top edge - if too close to top, show below instead
-      if (screenY - estimatedHeight < 10) {
-        popupY = message.y + estimatedHeight/2;
-        textY = message.y + 10;
-      }
-      
-      // Create a small popup with the message text
-      const popup = this.add.rectangle(
-        popupX, 
-        popupY, 
-        estimatedWidth, 
-        estimatedHeight, 
-        0x000000, 
-        0.8
-      );
-      
-      const text = this.add.text(
-        textX, 
-        textY, 
-        textContent, 
-        { 
-          font: '8px Arial', 
-          fill: '#ffffff',
-          wordWrap: { width: estimatedWidth - 10 }
-        }
-      );
-      
-      // Add timestamp if available
-      if (message.timestamp) {
-        const date = new Date(message.timestamp);
-        const timeString = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-        
-        const timeText = this.add.text(
-          textX,
-          textY + estimatedHeight - 12,
-          timeString,
-          {
-            font: '6px Arial',
-            fill: '#aaaaaa'
-          }
-        );
-        
-        // Store reference
-        marker.timeText = timeText;
-      }
-      
-      // Store references to destroy later
-      marker.popup = popup;
-      marker.text = text;
+      this.showMessageBox(message);
     });
     
     // Remove popup when mouse leaves
     marker.on('pointerout', () => {
-      if (marker.popup) {
-        marker.popup.destroy();
-        marker.text.destroy();
-        if (marker.timeText) {
-          marker.timeText.destroy();
-          marker.timeText = null;
-        }
-        marker.popup = null;
-        marker.text = null;
-      }
+      this.hideMessageBox();
     });
     
     return marker;
+  }
+  
+  showMessageBox(message) {
+    // Hide any existing message box first
+    this.hideMessageBox();
+    
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Calculate the area for the message box (bottom third of the screen)
+    const boxHeight = Math.floor(gameHeight / 3);
+    const boxY = gameHeight - boxHeight/2;
+    
+    // Create a dark background across the bottom of the screen
+    const background = this.add.rectangle(
+      gameWidth/2, 
+      boxY,
+      gameWidth, 
+      boxHeight,
+      0x000000, 
+      0.85
+    );
+    background.setScrollFactor(0);
+    
+    // Create a border for the message box
+    const border = this.add.rectangle(
+      gameWidth/2,
+      boxY,
+      gameWidth - 4,
+      boxHeight - 4,
+      0x000000,
+      0
+    );
+    border.setStrokeStyle(1, 0x888888);
+    border.setScrollFactor(0);
+    
+    // Format the message text
+    let textContent = message.text;
+    
+    // Create message text with retro font
+    const messageText = this.add.text(
+      20, 
+      gameHeight - boxHeight + 10,
+      textContent, 
+      { 
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px',
+        fill: '#ffffff',
+        wordWrap: { width: gameWidth - 40 },
+        lineSpacing: 8
+      }
+    );
+    messageText.setScrollFactor(0);
+    
+    // Add location info
+    const locationInfo = this.add.text(
+      20,
+      gameHeight - 30,
+      `Location: X:${Math.floor(message.x)}, Y:${Math.floor(message.y)}`,
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '6px',
+        fill: '#88ff88'
+      }
+    );
+    locationInfo.setScrollFactor(0);
+    
+    // Add timestamp if available
+    if (message.timestamp) {
+      const date = new Date(message.timestamp);
+      const timeString = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+      
+      const timeText = this.add.text(
+        gameWidth - 120,
+        gameHeight - 20,
+        timeString,
+        {
+          fontFamily: '"Press Start 2P"',
+          fontSize: '6px',
+          fill: '#aaaaaa'
+        }
+      );
+      timeText.setScrollFactor(0);
+      
+      // Store reference
+      this.messageBoxTimeText = timeText;
+    }
+    
+    // Store references to destroy later
+    this.messageBoxBackground = background;
+    this.messageBoxBorder = border;
+    this.messageBoxText = messageText;
+    this.messageBoxLocation = locationInfo;
+  }
+  
+  hideMessageBox() {
+    // Clean up all message box elements
+    if (this.messageBoxBackground) {
+      this.messageBoxBackground.destroy();
+      this.messageBoxBackground = null;
+    }
+    
+    if (this.messageBoxBorder) {
+      this.messageBoxBorder.destroy();
+      this.messageBoxBorder = null;
+    }
+    
+    if (this.messageBoxText) {
+      this.messageBoxText.destroy();
+      this.messageBoxText = null;
+    }
+    
+    if (this.messageBoxLocation) {
+      this.messageBoxLocation.destroy();
+      this.messageBoxLocation = null;
+    }
+    
+    if (this.messageBoxTimeText) {
+      this.messageBoxTimeText.destroy();
+      this.messageBoxTimeText = null;
+    }
   }
   
   setupMessageCreation() {
@@ -227,8 +257,9 @@ class MainScene extends Phaser.Scene {
       overlay.setScrollFactor(0);
       
       // Add a text prompt
-      const promptText = this.add.text(50, 70, 'Enter your message:', { 
-        font: '10px Arial', 
+      const promptText = this.add.text(50, 60, 'Enter your message:', { 
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px', 
         fill: '#ffffff' 
       });
       promptText.setScrollFactor(0);
@@ -237,25 +268,33 @@ class MainScene extends Phaser.Scene {
       const inputBox = this.add.rectangle(120, 90, 180, 20, 0x333333);
       inputBox.setScrollFactor(0);
       
+      // Add a nice border to the input box
+      const inputBorder = this.add.rectangle(120, 90, 184, 24, 0x000000, 0);
+      inputBorder.setStrokeStyle(2, 0x888888);
+      inputBorder.setScrollFactor(0);
+      
       // Initialize empty input text
       let currentInput = '';
       
-      const inputText = this.add.text(40, 85, '', { 
-        font: '10px Arial', 
+      const inputText = this.add.text(45, 85, '', { 
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px', 
         fill: '#ffffff' 
       });
       inputText.setScrollFactor(0);
       
       // Character counter
-      const charCounter = this.add.text(200, 85, '0/40', { 
-        font: '8px Arial', 
+      const charCounter = this.add.text(180, 85, '0/40', { 
+        fontFamily: '"Press Start 2P"',
+        fontSize: '6px', 
         fill: '#aaaaaa' 
       });
       charCounter.setScrollFactor(0);
       
       // Instructions
-      const instructions = this.add.text(40, 110, 'Press ENTER to post or ESC to cancel', { 
-        font: '8px Arial', 
+      const instructions = this.add.text(20, 120, 'ENTER: Post | ESC: Cancel', { 
+        fontFamily: '"Press Start 2P"',
+        fontSize: '6px', 
         fill: '#ffffff' 
       });
       instructions.setScrollFactor(0);
@@ -266,12 +305,12 @@ class MainScene extends Phaser.Scene {
         inputText.setText(currentInput);
         
         // Update character counter
-        charCounter.setText(`${currentInput.length}/40`);
+        charCounter.setText(`${currentInput.length}/30`);
         
         // Change counter color when approaching limit
-        if (currentInput.length > 30) {
+        if (currentInput.length > 20) {
           charCounter.setFill('#ff9900');
-        } else if (currentInput.length > 35) {
+        } else if (currentInput.length > 25) {
           charCounter.setFill('#ff0000');
         } else {
           charCounter.setFill('#aaaaaa');
@@ -296,8 +335,8 @@ class MainScene extends Phaser.Scene {
           currentInput = currentInput.slice(0, -1);
           updateTextDisplay();
         } else if (event.key.length === 1) { // Regular text input
-          // Limit message length
-          if (currentInput.length < 40) {
+          // Limit message length (reduced to 30 for the retro font)
+          if (currentInput.length < 30) {
             currentInput += event.key;
             updateTextDisplay();
           }
@@ -313,6 +352,7 @@ class MainScene extends Phaser.Scene {
         overlay.destroy();
         promptText.destroy();
         inputBox.destroy();
+        inputBorder.destroy();
         inputText.destroy();
         charCounter.destroy();
         instructions.destroy();
@@ -342,39 +382,95 @@ class MainScene extends Phaser.Scene {
       // Create a marker for the new message
       this.createMessageMarker(createdMessage);
       
-      // Show a small confirmation
+      // Create a retro-style notification box
+      const notificationBg = this.add.rectangle(
+        this.playerContainer.x, 
+        this.playerContainer.y - 20,
+        120, 
+        20, 
+        0x000000, 
+        0.8
+      );
+      
+      const notificationBorder = this.add.rectangle(
+        this.playerContainer.x, 
+        this.playerContainer.y - 20,
+        122, 
+        22, 
+        0x000000, 
+        0
+      );
+      notificationBorder.setStrokeStyle(1, 0x88ff88);
+      
+      // Show confirmation text
       const confirmation = this.add.text(
-        this.playerContainer.x - 40, 
-        this.playerContainer.y - 20, 
+        this.playerContainer.x - 55, 
+        this.playerContainer.y - 24, 
         'Message posted!', 
-        { font: '8px Arial', fill: '#ffffff' }
+        { 
+          fontFamily: '"Press Start 2P"', 
+          fontSize: '6px', 
+          fill: '#88ff88' 
+        }
       );
       
       // Fade out and destroy after 2 seconds
       this.tweens.add({
-        targets: confirmation,
+        targets: [notificationBg, notificationBorder, confirmation],
         alpha: 0,
         duration: 2000,
-        onComplete: () => confirmation.destroy()
+        onComplete: () => {
+          notificationBg.destroy();
+          notificationBorder.destroy();
+          confirmation.destroy();
+        }
       });
       
     } catch (error) {
       console.error('Error posting message:', error);
       
+      // Create a retro-style notification box
+      const errorBg = this.add.rectangle(
+        this.playerContainer.x, 
+        this.playerContainer.y - 20,
+        140, 
+        20, 
+        0x000000, 
+        0.8
+      );
+      
+      const errorBorder = this.add.rectangle(
+        this.playerContainer.x, 
+        this.playerContainer.y - 20,
+        142, 
+        22, 
+        0x000000, 
+        0
+      );
+      errorBorder.setStrokeStyle(1, 0xff8888);
+      
       // Show error notification
       const errorText = this.add.text(
-        this.playerContainer.x - 40, 
-        this.playerContainer.y - 20, 
+        this.playerContainer.x - 65, 
+        this.playerContainer.y - 24, 
         'Error posting message', 
-        { font: '8px Arial', fill: '#ff0000' }
+        { 
+          fontFamily: '"Press Start 2P"', 
+          fontSize: '6px', 
+          fill: '#ff8888' 
+        }
       );
       
       // Fade out and destroy after 2 seconds
       this.tweens.add({
-        targets: errorText,
+        targets: [errorBg, errorBorder, errorText],
         alpha: 0,
         duration: 2000,
-        onComplete: () => errorText.destroy()
+        onComplete: () => {
+          errorBg.destroy();
+          errorBorder.destroy();
+          errorText.destroy();
+        }
       });
     }
   }

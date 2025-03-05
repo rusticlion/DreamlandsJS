@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Into the Dreamlands</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     body {
       margin: 0;
@@ -14,11 +17,19 @@
       align-items: center;
       height: 100vh;
       overflow: hidden;
+      font-family: 'Press Start 2P', cursive;
     }
     canvas {
       display: block;
       image-rendering: pixelated; /* Ensures the pixel art is crisp */
       image-rendering: crisp-edges;
+    }
+    @font-face {
+      font-family: 'Press Start 2P';
+      font-style: normal;
+      font-weight: 400;
+      src: url(https://fonts.gstatic.com/s/pressstart2p/v14/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2) format('woff2');
+      font-display: swap;
     }
   </style>
 </head>
