@@ -5,10 +5,13 @@
 // Dynamically set the API URL based on the environment
 // In development: use localhost or the environment variable
 // In production: use the Heroku backend URL
-const API_URL = process.env.API_URL || 
-                (window.location.hostname === 'localhost' 
-                  ? 'http://localhost:3000' 
-                  : 'https://dreamlands-server.herokuapp.com');
+let baseUrl = process.env.API_URL || 
+              (window.location.hostname === 'localhost' 
+                ? 'http://localhost:3000' 
+                : 'https://dreamlands-server.herokuapp.com');
+
+// Normalize the URL to ensure it doesn't end with a slash
+const API_URL = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 
 /**
  * Get all messages
