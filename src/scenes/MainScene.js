@@ -29,8 +29,20 @@ class MainScene extends Phaser.Scene {
     
     // Create a simple enemy sprite as a rectangle (for prototype)
     const enemyGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+    
+    // Draw filled rectangle with border for better visibility
     enemyGraphics.fillStyle(0x663931); // Brown color to match with description
     enemyGraphics.fillRect(0, 0, 32, 16); // Two horizontal blocks (16px each)
+    
+    // Add a black outline 
+    enemyGraphics.lineStyle(1, 0x000000);
+    enemyGraphics.strokeRect(0, 0, 32, 16);
+    
+    // Add some distinguishing details to make it look enemy-like
+    enemyGraphics.fillStyle(0xFFFFFF);
+    enemyGraphics.fillCircle(8, 8, 2);  // Left eye
+    enemyGraphics.fillCircle(24, 8, 2); // Right eye
+    
     enemyGraphics.generateTexture('enemy', 32, 16);
   }
 
@@ -302,10 +314,11 @@ class MainScene extends Phaser.Scene {
     this.enemies = this.physics.add.group();
     
     // Create a few enemies positioned around the map
+    // Make sure they're aligned to the grid (multiples of this.tileSize + half tileSize for center)
     const enemyPositions = [
-      { x: 80, y: 48, id: 'enemy1' },
-      { x: 160, y: 112, id: 'enemy2' },
-      { x: 64, y: 112, id: 'enemy3' }
+      { x: 5 * this.tileSize + this.tileSize/2, y: 3 * this.tileSize + this.tileSize/2, id: 'enemy1' },
+      { x: 10 * this.tileSize + this.tileSize/2, y: 7 * this.tileSize + this.tileSize/2, id: 'enemy2' },
+      { x: 4 * this.tileSize + this.tileSize/2, y: 7 * this.tileSize + this.tileSize/2, id: 'enemy3' }
     ];
     
     enemyPositions.forEach(pos => {
@@ -320,13 +333,14 @@ class MainScene extends Phaser.Scene {
     });
     
     // Add overlap detection between player and enemies
-    this.physics.add.overlap(
-      this.playerContainer,
-      this.enemies,
-      this.handleEnemyOverlap,
-      null,
-      this
-    );
+    // If using the player container for overlap doesn't work well,
+    // we can use a physics body for detection instead
+    
+    // Ensure the player container has a physics body for easier detection in update()
+    if (this.playerContainer) {
+      this.physics.world.enable(this.playerContainer);
+      this.playerContainer.body.setSize(20, 20); // Adjust size for better collision detection
+    }
   }
   
   setupCombatListeners() {
@@ -445,45 +459,17 @@ class MainScene extends Phaser.Scene {
     });
   }
   
-  handleEnemyOverlap(player, enemy) {
-    // Get reference to global gameState
-    const gameState = window.gameState;
-    
-    // Only trigger combat if not already in combat
-    if (!gameState.combatActive) {
-      // Change enemy appearance when in range
-      enemy.setTint(0x992222); // Set to burgundy color
-      
-      // Show combat prompt if not already showing
-      if (!this.combatPrompt) {
-        this.combatPrompt = this.add.text(
-          enemy.x,
-          enemy.y - 16,
-          'Press SPACE to fight!',
-          {
-            fontFamily: '"Press Start 2P"',
-            fontSize: '6px',
-            fill: '#ffffff',
-            backgroundColor: '#000000',
-            padding: { x: 2, y: 1 }
-          }
-        ).setOrigin(0.5);
-      }
-      
-      // If spacebar is pressed, start combat
-      if (this.cursors.space && this.cursors.space.isDown) {
-        if (this.combatPrompt) {
-          this.combatPrompt.destroy();
-          this.combatPrompt = null;
-        }
-        this.startCombat(enemy);
-      }
-    }
-  }
+  // We've moved enemy detection logic to the update method for more reliable checking
   
   startCombat(enemy) {
     // Get reference to global gameState
     const gameState = window.gameState;
+    
+    // Clean up any combat prompt
+    if (this.combatPrompt) {
+      this.combatPrompt.destroy();
+      this.combatPrompt = null;
+    }
     
     // Set combat state
     gameState.combatActive = true;
@@ -524,8 +510,10 @@ class MainScene extends Phaser.Scene {
   update() {
     if (!this.playerContainer || this.isMoving) return;
     
-    // Reset enemy tints if not overlapping
-    if (this.enemies) {
+    // Check for enemy proximity
+    if (this.enemies && this.playerContainer) {
+      let enemyNearby = false;
+      
       this.enemies.getChildren().forEach(enemy => {
         // Check distance to player
         const distance = Phaser.Math.Distance.Between(
@@ -535,17 +523,45 @@ class MainScene extends Phaser.Scene {
           enemy.y
         );
         
-        // If not close, reset tint and remove combat prompt
-        if (distance > 32) {
-          enemy.clearTint();
+        // Debug output to check distances
+        // console.log(`Distance to ${enemy.getData('id')}: ${distance}`);
+        
+        // If player is close to an enemy
+        if (distance < 24) {  // Reduced from 32 to 24 for tighter proximity detection
+          enemy.setTint(0x992222); // Burgundy color
+          enemyNearby = true;
           
-          // Remove combat prompt if it exists
-          if (this.combatPrompt) {
-            this.combatPrompt.destroy();
-            this.combatPrompt = null;
+          // Show combat prompt if not already showing
+          if (!this.combatPrompt) {
+            this.combatPrompt = this.add.text(
+              enemy.x,
+              enemy.y - 16,
+              'Press SPACE to fight!',
+              {
+                fontFamily: '"Press Start 2P"',
+                fontSize: '6px',
+                fill: '#ffffff',
+                backgroundColor: '#000000',
+                padding: { x: 2, y: 1 }
+              }
+            ).setOrigin(0.5);
           }
+          
+          // If spacebar is pressed, start combat
+          if (this.cursors.space && Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
+            this.startCombat(enemy);
+          }
+        } else {
+          // If not close, reset tint
+          enemy.clearTint();
         }
       });
+      
+      // If no enemies nearby, remove the combat prompt
+      if (!enemyNearby && this.combatPrompt) {
+        this.combatPrompt.destroy();
+        this.combatPrompt = null;
+      }
     }
     
     // Handle keyboard movement
