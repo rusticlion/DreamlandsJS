@@ -6,7 +6,7 @@
   NODE_VERSION = "16"
 
 [context.production.environment]
-  API_URL = "https://dreamlands-server.herokuapp.com"
+  API_URL = "https://dreamlands-server-8f9d5f2979bd.herokuapp.com/"
 
 # Redirect all routes to index.html for SPA routing
 [[redirects]]

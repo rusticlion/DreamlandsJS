@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { checkHealth, getMessages, getMessagesByLevel, createMessage } from '../api/client';
 
 class MainScene extends Phaser.Scene {
   constructor() {
@@ -45,6 +46,219 @@ class MainScene extends Phaser.Scene {
     
     // Simple virtual joystick implementation
     this.setupJoystick();
+    
+    // Check API health and set up message functionality
+    this.setupMessagingSystem();
+  }
+  
+  async setupMessagingSystem() {
+    // Check API health
+    try {
+      const healthStatus = await checkHealth();
+      console.log('Backend health status:', healthStatus);
+      
+      // Display a small indicator in the corner to show backend status
+      const statusColor = healthStatus.status === 'ok' ? 0x00ff00 : 0xff0000;
+      const statusDot = this.add.circle(230, 10, 4, statusColor);
+      statusDot.setScrollFactor(0); // Fix position on screen
+      
+      // Add status text that appears on hover
+      const statusText = this.add.text(200, 15, 'API: ' + healthStatus.status, { 
+        font: '8px Arial', 
+        fill: '#ffffff' 
+      });
+      statusText.setScrollFactor(0);
+      statusText.setVisible(false);
+      
+      // Show text on hover
+      statusDot.setInteractive();
+      statusDot.on('pointerover', () => statusText.setVisible(true));
+      statusDot.on('pointerout', () => statusText.setVisible(false));
+      
+      // Fetch existing messages
+      this.loadExistingMessages();
+    } catch (error) {
+      console.error('Failed to connect to backend:', error);
+    }
+    
+    // Set up message creation
+    this.setupMessageCreation();
+  }
+  
+  async loadExistingMessages() {
+    try {
+      // Default to 'default' level if not specified
+      const currentLevel = 'default'; 
+      const messages = await getMessagesByLevel(currentLevel);
+      
+      console.log(`Loaded ${messages.length} messages for level ${currentLevel}`);
+      
+      // Create message markers on the map
+      messages.forEach(message => this.createMessageMarker(message));
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  }
+  
+  createMessageMarker(message) {
+    // Create a message marker at the specified coordinates
+    const marker = this.add.circle(message.x, message.y, 5, 0xffff00, 0.7);
+    
+    // Make it interactive
+    marker.setInteractive();
+    
+    // Show message text on hover
+    marker.on('pointerover', () => {
+      // Create a small popup with the message text
+      const popup = this.add.rectangle(message.x, message.y - 20, 100, 30, 0x000000, 0.7);
+      const text = this.add.text(message.x - 45, message.y - 30, message.text, { 
+        font: '8px Arial', 
+        fill: '#ffffff',
+        wordWrap: { width: 90 }
+      });
+      
+      // Store references to destroy later
+      marker.popup = popup;
+      marker.text = text;
+    });
+    
+    // Remove popup when mouse leaves
+    marker.on('pointerout', () => {
+      if (marker.popup) {
+        marker.popup.destroy();
+        marker.text.destroy();
+        marker.popup = null;
+        marker.text = null;
+      }
+    });
+    
+    return marker;
+  }
+  
+  setupMessageCreation() {
+    // Create a key binding for message creation (M key)
+    const mKey = this.input.keyboard.addKey('M');
+    
+    mKey.on('down', () => {
+      // Stop player movement
+      this.isMoving = true;
+      
+      // Create a dark overlay
+      const overlay = this.add.rectangle(120, 80, 240, 160, 0x000000, 0.7);
+      overlay.setScrollFactor(0);
+      
+      // Add a text prompt
+      const promptText = this.add.text(50, 70, 'Enter your message:', { 
+        font: '10px Arial', 
+        fill: '#ffffff' 
+      });
+      promptText.setScrollFactor(0);
+      
+      // Create an input text box (simulated)
+      const inputBox = this.add.rectangle(120, 90, 180, 20, 0x333333);
+      inputBox.setScrollFactor(0);
+      
+      const inputText = this.add.text(40, 85, '', { 
+        font: '10px Arial', 
+        fill: '#ffffff' 
+      });
+      inputText.setScrollFactor(0);
+      
+      // Instructions
+      const instructions = this.add.text(40, 110, 'Press ENTER to post or ESC to cancel', { 
+        font: '8px Arial', 
+        fill: '#ffffff' 
+      });
+      instructions.setScrollFactor(0);
+      
+      // Handle keyboard input
+      const keyboardInput = this.input.keyboard.on('keydown', event => {
+        if (event.keyCode === 27) { // ESC key
+          // Cancel and clean up
+          overlay.destroy();
+          promptText.destroy();
+          inputBox.destroy();
+          inputText.destroy();
+          instructions.destroy();
+          this.input.keyboard.removeListener('keydown', keyboardInput);
+          this.isMoving = false;
+        } else if (event.keyCode === 13) { // ENTER key
+          // Post the message
+          if (inputText.text.trim() !== '') {
+            this.postMessage(inputText.text);
+          }
+          
+          // Clean up
+          overlay.destroy();
+          promptText.destroy();
+          inputBox.destroy();
+          inputText.destroy();
+          instructions.destroy();
+          this.input.keyboard.removeListener('keydown', keyboardInput);
+          this.isMoving = false;
+        } else if (event.keyCode === 8) { // BACKSPACE key
+          inputText.text = inputText.text.slice(0, -1);
+        } else if (event.key.length === 1) { // Regular text input
+          // Limit message length
+          if (inputText.text.length < 40) {
+            inputText.text += event.key;
+          }
+        }
+      });
+    });
+  }
+  
+  async postMessage(text) {
+    // Create a message at the player's current position
+    const message = {
+      text: text,
+      x: this.playerContainer.x,
+      y: this.playerContainer.y,
+      level: 'default' // Default level
+    };
+    
+    try {
+      const createdMessage = await createMessage(message);
+      console.log('Message posted successfully:', createdMessage);
+      
+      // Create a marker for the new message
+      this.createMessageMarker(createdMessage);
+      
+      // Show a small confirmation
+      const confirmation = this.add.text(
+        this.playerContainer.x - 40, 
+        this.playerContainer.y - 20, 
+        'Message posted!', 
+        { font: '8px Arial', fill: '#ffffff' }
+      );
+      
+      // Fade out and destroy after 2 seconds
+      this.tweens.add({
+        targets: confirmation,
+        alpha: 0,
+        duration: 2000,
+        onComplete: () => confirmation.destroy()
+      });
+      
+    } catch (error) {
+      console.error('Error posting message:', error);
+      
+      // Show error notification
+      const errorText = this.add.text(
+        this.playerContainer.x - 40, 
+        this.playerContainer.y - 20, 
+        'Error posting message', 
+        { font: '8px Arial', fill: '#ff0000' }
+      );
+      
+      // Fade out and destroy after 2 seconds
+      this.tweens.add({
+        targets: errorText,
+        alpha: 0,
+        duration: 2000,
+        onComplete: () => errorText.destroy()
+      });
+    }
   }
   
   createWithTiledMap() {

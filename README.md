@@ -52,12 +52,16 @@ npm run dev
 
 - Use arrow keys on desktop to move the character
 - On mobile, use the virtual joystick in the bottom-left corner
+- Press 'M' to create a new message at your current location
+- Hover over yellow circles to read messages left by other players
 
 ## Features
 
 - Tile-based movement with collision detection
 - Player messaging system inspired by Dark Souls
 - RESTful API for storing and retrieving player messages
+- Backend server status indicator (green dot in top-right corner)
+- Asynchronous player interactions through messages
 
 ## Deployment
 
