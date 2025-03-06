@@ -95,6 +95,17 @@ class MainScene extends Phaser.Scene {
     
     // Add health display
     this.setupPlayerHealthDisplay();
+    
+    // Add a simple distance display that will be updated in the game loop
+    this.distanceDisplay = this.add.text(5, 5, 'Distance: --', {
+      fontFamily: 'Arial',
+      fontSize: '8px',
+      backgroundColor: '#000000',
+      padding: { x: 3, y: 3 },
+      fill: '#ffffff'
+    });
+    this.distanceDisplay.setScrollFactor(0); // Keep it fixed on screen
+    this.distanceDisplay.setDepth(1000); // Make sure it's on top
   }
   
   async setupMessagingSystem() {
@@ -596,35 +607,59 @@ class MainScene extends Phaser.Scene {
   update() {
     if (!this.playerContainer || this.isMoving) return;
     
-    // Simplest possible combat detection: 
-    // Check for spacebar press and find close enemy
-    if (this.cursors && this.cursors.space && Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
-      // Find the closest enemy
-      let closestEnemy = null;
-      let minDistance = 40; // Detection radius in pixels
+    // Initialize variables for distance debugging
+    let closestEnemy = null;
+    let minDistance = Infinity;
+    
+    // Check all enemies and find the closest one
+    if (this.enemies && this.playerContainer) {
+      this.enemies.getChildren().forEach(enemy => {
+        // Calculate distance to this enemy
+        const distance = Phaser.Math.Distance.Between(
+          this.playerContainer.x, this.playerContainer.y,
+          enemy.x, enemy.y
+        );
+        
+        // Keep track of the closest enemy and distance
+        if (distance < minDistance) {
+          closestEnemy = enemy;
+          minDistance = distance;
+        }
+      });
       
-      if (this.enemies) {
-        this.enemies.getChildren().forEach(enemy => {
-          const distance = Phaser.Math.Distance.Between(
-            this.playerContainer.x, this.playerContainer.y,
-            enemy.x, enemy.y
+      // Update the distance display
+      if (this.distanceDisplay) {
+        if (closestEnemy) {
+          this.distanceDisplay.setText(
+            `Enemy: ${Math.round(minDistance)}px\n` +
+            `Player: ${Math.round(this.playerContainer.x)},${Math.round(this.playerContainer.y)}\n` +
+            `Enemy: ${Math.round(closestEnemy.x)},${Math.round(closestEnemy.y)}`
           );
           
-          if (distance < minDistance) {
-            closestEnemy = enemy;
-            minDistance = distance;
+          // Change color based on distance
+          if (minDistance < 40) {
+            this.distanceDisplay.setBackgroundColor('#550000');
+            this.distanceDisplay.setFill('#ffffff');
+          } else {
+            this.distanceDisplay.setBackgroundColor('#000000');
+            this.distanceDisplay.setFill('#ffffff');
           }
-        });
-        
-        // If we found an enemy in range, start combat
-        if (closestEnemy) {
-          this.startCombat(closestEnemy);
-          return; // Skip rest of update if we're entering combat
+        } else {
+          this.distanceDisplay.setText('No enemies found');
         }
       }
     }
     
-    // Simple enemy proximity check
+    // Check for spacebar press to start combat
+    if (this.cursors && this.cursors.space && Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
+      // Only trigger combat if an enemy is close enough
+      if (closestEnemy && minDistance < 40) {
+        this.startCombat(closestEnemy);
+        return; // Skip rest of update if we're entering combat
+      }
+    }
+    
+    // Process enemies for visual feedback
     if (this.enemies && this.playerContainer) {
       let enemyNearby = false;
       
