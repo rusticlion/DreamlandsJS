@@ -495,33 +495,24 @@ class MainScene extends Phaser.Scene {
       console.log('MainScene resumed with data:', data);
       
       // Update scene based on combat results
-      if (data && data.victory && data.enemyId) {
-        console.log('Looking for enemy with ID:', data.enemyId);
-        
-        // Debug log to check all enemy IDs
-        const allEnemyIds = this.entities.enemies.getChildren().map(enemy => enemy.getData('id'));
-        console.log('Available enemy IDs:', allEnemyIds);
-        
-        // Find the defeated enemy from our entity registry
-        const defeatedEnemy = this.entities.enemies.getChildren().find(
-          enemy => enemy.getData('id') === data.enemyId
-        );
-        
-        console.log('Found enemy?', defeatedEnemy ? 'Yes' : 'No');
-        
-        if (defeatedEnemy) {
-          console.log('Removing enemy with ID:', defeatedEnemy.getData('id'));
+      if (data && data.victory) {
+        // Use the stored enemy reference directly - much more reliable
+        if (this._currentCombatEnemy && this._currentCombatEnemy.active) {
+          console.log('Removing enemy with ID:', this._currentCombatEnemy.getData('id'));
           
           // Remove from all entity collections
-          this.entities.enemies.remove(defeatedEnemy);
-          this.allEntities.remove(defeatedEnemy);
+          this.entities.enemies.remove(this._currentCombatEnemy);
+          this.allEntities.remove(this._currentCombatEnemy);
           
           // Destroy the enemy sprite
-          defeatedEnemy.destroy();
+          this._currentCombatEnemy.destroy();
+          
+          // Clear the reference
+          this._currentCombatEnemy = null;
           
           console.log('Enemy removed successfully');
         } else {
-          console.error('Failed to find enemy with ID:', data.enemyId);
+          console.error('No active enemy reference found to remove');
         }
         
         // Show victory message
@@ -529,6 +520,9 @@ class MainScene extends Phaser.Scene {
       } else {
         // Show defeat message
         this.showCombatResult('DEFEAT!', '#ff8888');
+        
+        // Clear combat enemy reference on defeat
+        this._currentCombatEnemy = null;
       }
       
       // Update health display
@@ -849,6 +843,9 @@ class MainScene extends Phaser.Scene {
     // Debug log the enemy ID we're storing
     const enemyId = enemy.getData('id');
     console.log('Starting combat with enemy ID:', enemyId);
+    
+    // Store a direct reference to the enemy object for easier retrieval
+    this._currentCombatEnemy = enemy;
     
     // Set combat state
     gameState.combatActive = true;
