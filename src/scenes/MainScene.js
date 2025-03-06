@@ -27,9 +27,9 @@ class MainScene extends Phaser.Scene {
     this.load.image('tiles', 'assets/tileset.png');
     this.load.tilemapTiledJSON('map', 'assets/map.json');
     
-    // Load a custom enemy texture directly, avoiding texture generation
-    // which might cause issues in the deployed version
+    // Create textures for game entities
     this.createEnemyTexture();
+    this.createBoulderTexture();
   }
   
   // Create enemy texture in a more reliable way
@@ -46,7 +46,7 @@ class MainScene extends Phaser.Scene {
     // Get context and draw enemy
     const ctx = canvas.getContext('2d');
     
-    // Fill with red color for high visibility
+    // Fill with brown color
     ctx.fillStyle = '#aa5500';
     ctx.fillRect(0, 0, size, size);
     
@@ -63,6 +63,44 @@ class MainScene extends Phaser.Scene {
     
     // Create texture from canvas
     this.textures.addCanvas('enemy', canvas);
+  }
+  
+  // Create boulder texture
+  createBoulderTexture() {
+    // Check if texture already exists
+    if (this.textures.exists('boulder')) return;
+    
+    // Create canvas element for drawing
+    const size = 16; // Single tile size
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    
+    // Get context and draw boulder
+    const ctx = canvas.getContext('2d');
+    
+    // Fill with gray color
+    ctx.fillStyle = '#777777';
+    ctx.fillRect(0, 0, size, size);
+    
+    // Add border
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, size, size);
+    
+    // Add rocky texture details
+    ctx.fillStyle = '#555555';
+    ctx.fillRect(3, 3, 4, 4);
+    ctx.fillRect(10, 6, 3, 3);
+    ctx.fillRect(5, 10, 4, 3);
+    
+    // Highlight
+    ctx.fillStyle = '#999999';
+    ctx.fillRect(2, 2, 2, 2);
+    ctx.fillRect(12, 3, 2, 2);
+    
+    // Create texture from canvas
+    this.textures.addCanvas('boulder', canvas);
   }
 
   create() {
@@ -87,25 +125,30 @@ class MainScene extends Phaser.Scene {
     // Check API health and set up message functionality
     this.setupMessagingSystem();
     
-    // Add enemies to the scene
+    // Initialize entity registry - a container for all game entities
+    this.initializeEntityRegistry();
+    
+    // Add entities to the scene 
     this.setupEnemies();
+    this.setupBoulders();
     
     // Set up combat-related listeners
     this.setupCombatListeners();
     
     // Add health display
     this.setupPlayerHealthDisplay();
+  }
+  
+  initializeEntityRegistry() {
+    // Create groups to manage different entity types
+    this.entities = {
+      enemies: this.add.group(),
+      boulders: this.add.group(),
+      // Future entity types can be added here
+    };
     
-    // Add a simple distance display that will be updated in the game loop
-    this.distanceDisplay = this.add.text(5, 5, 'Distance: --', {
-      fontFamily: 'Arial',
-      fontSize: '8px',
-      backgroundColor: '#000000',
-      padding: { x: 3, y: 3 },
-      fill: '#ffffff'
-    });
-    this.distanceDisplay.setScrollFactor(0); // Keep it fixed on screen
-    this.distanceDisplay.setDepth(1000); // Make sure it's on top
+    // Master list of all entities
+    this.allEntities = this.add.group();
   }
   
   async setupMessagingSystem() {
@@ -337,40 +380,95 @@ class MainScene extends Phaser.Scene {
   }
   
   setupEnemies() {
-    console.log("Setting up enemies");
-    
-    // Create enemies group (using normal sprites instead of physics for simplicity)
-    this.enemies = this.add.group();
-    
-    // Create enemies at specific positions (using absolute pixel positions)
-    // Placing them in very visible positions
+    // Create enemies at specific positions (using tile-based positions)
+    // Convert tile positions to pixel positions with tileSize (16)
+    // Make sure to position enemies at the center of tiles
     const enemyPositions = [
-      { x: 80, y: 48, id: 'enemy1' },
-      { x: 160, y: 112, id: 'enemy2' },
-      { x: 48, y: 112, id: 'enemy3' },
+      { x: 5, y: 3, id: 'enemy1' },
+      { x: 10, y: 7, id: 'enemy2' },
+      { x: 3, y: 7, id: 'enemy3' },
       // Add one right where player starts for immediate testing
-      { x: 48, y: 48, id: 'enemy_test' }
+      // Player starts at tile (1,1), so place enemy at tile (2,2) for testing
+      { x: 2, y: 2, id: 'enemy_test' }
     ];
-    
-    console.log(`Creating ${enemyPositions.length} enemies`);
     
     // Create each enemy directly without physics to avoid any issues
     enemyPositions.forEach(pos => {
-      // Create basic sprite
-      const enemy = this.add.sprite(pos.x, pos.y, 'enemy');
-      enemy.setOrigin(0.5, 0.5);
-      
-      // Store ID and make it larger for visibility
-      enemy.setData('id', pos.id);
-      enemy.setScale(1.5);
-      
-      // Add to the group
-      this.enemies.add(enemy);
-      
-      console.log(`Created enemy ${pos.id} at ${pos.x}, ${pos.y}`);
+      this.createEntity({
+        type: 'enemy',
+        gridX: pos.x,
+        gridY: pos.y,
+        id: pos.id,
+        properties: {
+          interactionType: 'combat',
+          pushable: false
+        }
+      });
     });
     
-    console.log(`Total enemies created: ${this.enemies.getChildren().length}`);
+    // For backward compatibility
+    this.enemies = this.entities.enemies;
+  }
+  
+  // Create a boulder at the given grid position
+  setupBoulders() {
+    // Define boulder positions (grid coordinates) - ensuring they're in open areas
+    const boulderPositions = [
+      { x: 4, y: 2, id: 'boulder1' },
+      { x: 8, y: 3, id: 'boulder2' },
+      { x: 6, y: 6, id: 'boulder3' }
+    ];
+    
+    // Create each boulder
+    boulderPositions.forEach(pos => {
+      this.createEntity({
+        type: 'boulder',
+        gridX: pos.x,
+        gridY: pos.y,
+        id: pos.id,
+        properties: {
+          interactionType: 'push',
+          pushable: true
+        }
+      });
+    });
+  }
+  
+  // Generic entity creation method
+  createEntity(config) {
+    // Convert grid coordinates to pixel coordinates
+    const pixelX = config.gridX * this.tileSize + this.tileSize/2;
+    const pixelY = config.gridY * this.tileSize + this.tileSize/2;
+    
+    // Create sprite with the appropriate texture
+    const entity = this.add.sprite(pixelX, pixelY, config.type);
+    entity.setOrigin(0.5, 0.5);
+    
+    // Store entity data
+    entity.setData('id', config.id);
+    entity.setData('type', config.type);
+    entity.setData('originalX', pixelX);
+    entity.setData('originalY', pixelY);
+    entity.setData('gridX', config.gridX);
+    entity.setData('gridY', config.gridY);
+    entity.setData('state', 'idle');
+    
+    // Store any custom properties
+    if (config.properties) {
+      Object.entries(config.properties).forEach(([key, value]) => {
+        entity.setData(key, value);
+      });
+    }
+    
+    // Add to appropriate group
+    if (this.entities[config.type + 's']) {
+      this.entities[config.type + 's'].add(entity);
+    }
+    
+    // Add to master entities list
+    this.allEntities.add(entity);
+    
+    return entity;
   }
   
   setupCombatListeners() {
@@ -507,7 +605,171 @@ class MainScene extends Phaser.Scene {
     });
   }
   
-  // Helper method to create the combat prompt
+  // Helper method for entity adjacency detection
+  isEntityAdjacent(playerX, playerY, entity) {
+    // Convert pixel positions to tile positions
+    const playerTileX = Math.floor(playerX / this.tileSize);
+    const playerTileY = Math.floor(playerY / this.tileSize);
+    const entityTileX = Math.floor(entity.x / this.tileSize);
+    const entityTileY = Math.floor(entity.y / this.tileSize);
+    
+    // Check if adjacent horizontally or vertically (not diagonally)
+    // This means the difference in x OR y is 1, but not both
+    const xDiff = Math.abs(playerTileX - entityTileX);
+    const yDiff = Math.abs(playerTileY - entityTileY);
+    
+    // Adjacent means exactly one of these is true:
+    // 1. They're in the same row but adjacent columns (xDiff=1, yDiff=0)
+    // 2. They're in the same column but adjacent rows (xDiff=0, yDiff=1)
+    return (xDiff === 1 && yDiff === 0) || (xDiff === 0 && yDiff === 1);
+  }
+  
+  // Get the grid direction from source to target
+  getDirectionBetweenTiles(srcX, srcY, targetX, targetY) {
+    // Determine the direction from source to target
+    if (targetX > srcX) return 'right';
+    if (targetX < srcX) return 'left';
+    if (targetY > srcY) return 'down';
+    if (targetY < srcY) return 'up';
+    return null; // Same position
+  }
+  
+  // Try to push an entity in the given direction
+  tryPushEntity(entity, direction) {
+    // Get current grid position of the entity
+    const entityTileX = Math.floor(entity.x / this.tileSize);
+    const entityTileY = Math.floor(entity.y / this.tileSize);
+    
+    // Calculate target position based on direction
+    let targetTileX = entityTileX;
+    let targetTileY = entityTileY;
+    
+    switch (direction) {
+      case 'left':
+        targetTileX -= 1;
+        break;
+      case 'right':
+        targetTileX += 1;
+        break;
+      case 'up':
+        targetTileY -= 1;
+        break;
+      case 'down':
+        targetTileY += 1;
+        break;
+    }
+    
+    // Convert target position to world position
+    const targetX = targetTileX * this.tileSize + this.tileSize / 2;
+    const targetY = targetTileY * this.tileSize + this.tileSize / 2;
+    
+    // Check if target tile is walkable
+    let isPushable = true;
+    
+    // Check for wall collisions
+    if (this.tilemapMode === 'tiled' && this.map && this.objectLayer) {
+      try {
+        const targetTile = this.map.getTileAt(targetTileX, targetTileY, false, 'Objects');
+        isPushable = !targetTile || targetTile.index === 0;
+      } catch (error) {
+        isPushable = false;
+      }
+    } else if (this.tilemapMode === 'manual' && this.mapData) {
+      // Check bounds first
+      if (targetTileX >= 0 && targetTileX < 15 && targetTileY >= 0 && targetTileY < 10) {
+        isPushable = this.mapData[targetTileY][targetTileX] === 0;
+      } else {
+        isPushable = false;
+      }
+    }
+    
+    // Check for entity collisions at target position
+    if (isPushable && this.allEntities) {
+      const blockingEntities = this.allEntities.getChildren().filter(other => {
+        const otherTileX = Math.floor(other.x / this.tileSize);
+        const otherTileY = Math.floor(other.y / this.tileSize);
+        return otherTileX === targetTileX && otherTileY === targetTileY;
+      });
+      
+      if (blockingEntities.length > 0) {
+        isPushable = false;
+      }
+    }
+    
+    // If pushable, move the entity
+    if (isPushable) {
+      // Update entity's grid position
+      entity.setData('gridX', targetTileX);
+      entity.setData('gridY', targetTileY);
+      
+      // Move entity with a smooth tween
+      this.tweens.add({
+        targets: entity,
+        x: targetX,
+        y: targetY,
+        duration: 200,
+        ease: 'Power1',
+        onComplete: () => {
+          // Update entity's original position for state management
+          entity.setData('originalX', targetX);
+          entity.setData('originalY', targetY);
+        }
+      });
+      
+      // Play push sound effect (if we had one)
+      // this.sound.play('push');
+      
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // Enemy state management methods
+  transitionEnemyToAlert(enemy) {
+    // Set state to alert
+    enemy.setData('state', 'alert');
+    
+    // Apply visual changes for alert state
+    enemy.setTint(0xFF0000);
+    
+    // Start bobbing animation
+    enemy.wobble = this.tweens.add({
+      targets: enemy,
+      y: enemy.y - 4,
+      duration: 500,
+      yoyo: true,
+      repeat: -1
+    });
+  }
+  
+  transitionEnemyToIdle(enemy) {
+    // Set state to idle
+    enemy.setData('state', 'idle');
+    
+    // Stop bobbing animation
+    if (enemy.wobble) {
+      enemy.wobble.stop();
+      enemy.wobble = null;
+    }
+    
+    // Reset visual appearance
+    enemy.clearTint();
+    
+    // Reset position to original grid position
+    const originalX = enemy.getData('originalX');
+    const originalY = enemy.getData('originalY');
+    
+    // Use a quick tween to move back to original position
+    this.tweens.add({
+      targets: enemy,
+      x: originalX,
+      y: originalY,
+      duration: 150,
+      ease: 'Power1'
+    });
+  }
+  
   createCombatPrompt(enemy) {
     // Create a very visible prompt in the center of the screen
     const promptBg = this.add.rectangle(
@@ -559,11 +821,10 @@ class MainScene extends Phaser.Scene {
       this.combatPrompt = null;
     }
     
-    // Also stop any pulse effect on the enemy
-    if (enemy.pulseEffect) {
-      enemy.pulseEffect.stop();
-      enemy.pulseEffect = null;
-      enemy.setAlpha(1);
+    // Clean up any enemy animation state 
+    if (enemy.wobble) {
+      enemy.wobble.stop();
+      enemy.wobble = null;
     }
     
     // Set combat state
@@ -603,175 +864,120 @@ class MainScene extends Phaser.Scene {
   }
   
   update() {
-    if (!this.playerContainer || this.isMoving) return;
+    // Skip all processing if we're moving between tiles
+    if (this.isMoving || !this.playerContainer) return;
     
-    // Initialize variables for distance debugging
+    // PART 1: ENTITY DETECTION AND STATE MANAGEMENT
+    
+    // Initialize variables for entity tracking
     let closestEnemy = null;
     let minDistance = Infinity;
     
-    // Always update the debug display with player position, even if enemies aren't found
-    const playerPos = this.playerContainer ? 
-      `Player: ${Math.round(this.playerContainer.x)},${Math.round(this.playerContainer.y)}` : 
-      'Player: not found';
-      
-    // Basic enemy count check
-    const enemyCount = this.enemies ? this.enemies.getChildren().length : 0;
-    const enemyCountText = `Enemies: ${enemyCount}`;
+    // Get player position from the container
+    const playerX = this.playerContainer.x;
+    const playerY = this.playerContainer.y;
+    const playerGridX = Math.floor(playerX / this.tileSize);
+    const playerGridY = Math.floor(playerY / this.tileSize);
     
-    // Check all enemies and find the closest one
-    if (this.enemies && this.playerContainer) {
-      // Print direct debug to console
-      console.log(`Player position: ${this.playerContainer.x}, ${this.playerContainer.y}`);
-      console.log(`Enemy count: ${enemyCount}`);
-      
-      if (enemyCount > 0) {
-        this.enemies.getChildren().forEach(enemy => {
-          // Log each enemy position
-          console.log(`Enemy at: ${enemy.x}, ${enemy.y}`);
-          
-          // Calculate distance to this enemy
-          const distance = Phaser.Math.Distance.Between(
-            this.playerContainer.x, this.playerContainer.y,
-            enemy.x, enemy.y
-          );
-          
-          console.log(`Distance to enemy: ${distance}`);
-          
-          // Keep track of the closest enemy and distance
-          if (distance < minDistance) {
-            closestEnemy = enemy;
-            minDistance = distance;
-          }
-        });
-      }
-      
-      // Update the distance display
-      if (this.distanceDisplay) {
-        if (closestEnemy) {
-          this.distanceDisplay.setText(
-            `Enemy: ${Math.round(minDistance)}px\n` +
-            playerPos + '\n' +
-            `Enemy: ${Math.round(closestEnemy.x)},${Math.round(closestEnemy.y)}\n` + 
-            enemyCountText
-          );
-          
-          // Change color based on distance
-          if (minDistance < 40) {
-            this.distanceDisplay.setBackgroundColor('#550000');
-            this.distanceDisplay.setFill('#ffffff');
-          } else {
-            this.distanceDisplay.setBackgroundColor('#000000');
-            this.distanceDisplay.setFill('#ffffff');
-          }
-        } else {
-          this.distanceDisplay.setText(
-            `No enemies in range\n` +
-            playerPos + '\n' + 
-            enemyCountText
-          );
+    // Process all entities
+    if (this.allEntities && this.allEntities.getChildren().length > 0) {
+      this.allEntities.getChildren().forEach(entity => {
+        // Calculate distance using manual formula
+        const dx = playerX - entity.x;
+        const dy = playerY - entity.y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        const entityType = entity.getData('type');
+        const currentState = entity.getData('state');
+        
+        // Track closest enemy for combat
+        if (entityType === 'enemy' && distance < minDistance) {
+          closestEnemy = entity;
+          minDistance = distance;
         }
-      }
-    } else {
-      // Update display with whatever information we have
-      if (this.distanceDisplay) {
-        this.distanceDisplay.setText(
-          `System state:\n` +
-          playerPos + '\n' + 
-          enemyCountText + '\n' + 
-          `Enemies group: ${this.enemies ? 'exists' : 'null'}`
-        );
-      }
+        
+        // Handle entity-specific state changes based on adjacency
+        const isAdjacent = this.isEntityAdjacent(playerX, playerY, entity);
+        
+        if (entityType === 'enemy') {
+          if (isAdjacent && currentState === 'idle') {
+            // Transition enemy to alert state when adjacent
+            this.transitionEnemyToAlert(entity);
+          } else if (!isAdjacent && currentState === 'alert') {
+            // Transition back to idle state when not adjacent
+            this.transitionEnemyToIdle(entity);
+          }
+        } else if (entityType === 'boulder') {
+          // Boulder-specific state changes (highlighting when adjacent)
+          if (isAdjacent && currentState === 'idle') {
+            // Highlight boulder when adjacent
+            entity.setTint(0xAAAAAA);
+            entity.setData('state', 'highlighted');
+          } else if (!isAdjacent && currentState === 'highlighted') {
+            // Remove highlight when not adjacent
+            entity.clearTint();
+            entity.setData('state', 'idle');
+          }
+        }
+      });
+    }
+    
+    // PART 2: COMBAT PROMPT MANAGEMENT
+    
+    // Show/hide combat prompt based on adjacency to closest enemy
+    const enemyIsAdjacent = closestEnemy && this.isEntityAdjacent(playerX, playerY, closestEnemy);
+    
+    if (enemyIsAdjacent && !this.combatPrompt) {
+      // Show combat prompt if adjacent and not already showing
+      this.createCombatPrompt(closestEnemy);
+    } else if (!enemyIsAdjacent && this.combatPrompt) {
+      // Hide combat prompt if not adjacent but showing
+      this.combatPrompt.bg.destroy();
+      this.combatPrompt.text.destroy();
+      this.combatPrompt = null;
     }
     
     // Check for spacebar press to start combat
     if (this.cursors && this.cursors.space && Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
-      // Only trigger combat if an enemy is close enough
-      if (closestEnemy && minDistance < 40) {
+      if (enemyIsAdjacent) {
         this.startCombat(closestEnemy);
         return; // Skip rest of update if we're entering combat
       }
     }
     
-    // Process enemies for visual feedback
-    if (this.enemies && this.playerContainer) {
-      let enemyNearby = false;
-      
-      this.enemies.getChildren().forEach(enemy => {
-        // Check distance to enemy
-        const distance = Phaser.Math.Distance.Between(
-          this.playerContainer.x,
-          this.playerContainer.y,
-          enemy.x,
-          enemy.y
-        );
-        
-        // Simple highlight logic - if close, highlight enemy
-        if (distance < 40) {  // 40 pixel detection radius
-          // Tint enemy red when in range
-          enemy.setTint(0xFF0000); 
-          
-          // Add simple tween if not already added
-          if (!enemy.wobble) {
-            enemy.wobble = this.tweens.add({
-              targets: enemy,
-              y: enemy.y - 4,
-              duration: 500,
-              yoyo: true,
-              repeat: -1
-            });
-          }
-          
-          enemyNearby = true;
-          
-          // Show combat prompt if not already showing
-          if (!this.combatPrompt) {
-            this.createCombatPrompt(enemy);
-          }
-        } else {
-          // Reset enemy appearance when not in range
-          enemy.clearTint();
-          
-          // Stop wobble animation
-          if (enemy.wobble) {
-            enemy.wobble.stop();
-            enemy.wobble = null;
-            enemy.y = Math.floor(enemy.y); // Reset to integer position
-          }
-        }
-      });
-      
-      // Clear combat prompt if no enemies nearby
-      if (!enemyNearby && this.combatPrompt) {
-        this.combatPrompt.bg.destroy();
-        this.combatPrompt.text.destroy();
-        this.combatPrompt = null;
-      }
-    }
+    // PART 3: PLAYER MOVEMENT
     
     // Handle keyboard movement
+    let direction = null;
+    
     if (this.cursors.left.isDown) {
-      this.movePlayer('left');
+      direction = 'left';
     } else if (this.cursors.right.isDown) {
-      this.movePlayer('right');
+      direction = 'right';
     } else if (this.cursors.up.isDown) {
-      this.movePlayer('up');
+      direction = 'up';
     } else if (this.cursors.down.isDown) {
-      this.movePlayer('down');
+      direction = 'down';
     }
     
     // Handle joystick movement
-    if (this.joystick.isActive && this.joystick.force > 0.5) {
+    if (!direction && this.joystick.isActive && this.joystick.force > 0.5) {
       const angle = this.joystick.angle;
       // Convert angle to direction
       if (angle >= -Math.PI/4 && angle < Math.PI/4) {
-        this.movePlayer('right');
+        direction = 'right';
       } else if (angle >= Math.PI/4 && angle < 3*Math.PI/4) {
-        this.movePlayer('down');
+        direction = 'down';
       } else if (angle >= 3*Math.PI/4 || angle < -3*Math.PI/4) {
-        this.movePlayer('left');
+        direction = 'left';
       } else {
-        this.movePlayer('up');
+        direction = 'up';
       }
+    }
+    
+    // If we have a direction, update current direction and move
+    if (direction) {
+      this.currentDirection = direction;
+      this.movePlayer(direction);
     }
   }
   
@@ -1217,42 +1423,7 @@ class MainScene extends Phaser.Scene {
     }
   }
 
-  update() {
-    if (!this.playerContainer || this.isMoving) return;
-
-    // Handle keyboard input
-    let direction = null;
-    
-    if (this.cursors.left.isDown) {
-      direction = 'left';
-    } else if (this.cursors.right.isDown) {
-      direction = 'right';
-    } else if (this.cursors.up.isDown) {
-      direction = 'up';
-    } else if (this.cursors.down.isDown) {
-      direction = 'down';
-    }
-    
-    // Handle joystick input
-    if (this.joystick.isActive && this.joystick.force > 0.5) {
-      const angle = this.joystick.angle;
-      // Convert angle to direction
-      if (angle >= -Math.PI/4 && angle < Math.PI/4) {
-        direction = 'right';
-      } else if (angle >= Math.PI/4 && angle < 3*Math.PI/4) {
-        direction = 'down';
-      } else if (angle >= 3*Math.PI/4 || angle < -3*Math.PI/4) {
-        direction = 'left';
-      } else {
-        direction = 'up';
-      }
-    }
-    
-    if (direction) {
-      this.currentDirection = direction;
-      this.movePlayer(direction);
-    }
-  }
+//_____Keep this comment to make sure this function is unique in the search_____
   
   movePlayer(direction) {
     if (this.isMoving) return;
@@ -1301,6 +1472,31 @@ class MainScene extends Phaser.Scene {
         isWalkable = this.mapData[targetTileY][targetTileX] === 0;
       } else {
         isWalkable = false;
+      }
+    }
+    
+    // Check for entity collision - handle different entity types
+    if (isWalkable && this.allEntities) {
+      // Check if any entity occupies the target tile
+      const entitiesAtTargetTile = this.allEntities.getChildren().filter(entity => {
+        const entityTileX = Math.floor(entity.x / this.tileSize);
+        const entityTileY = Math.floor(entity.y / this.tileSize);
+        return entityTileX === targetTileX && entityTileY === targetTileY;
+      });
+      
+      if (entitiesAtTargetTile.length > 0) {
+        const entity = entitiesAtTargetTile[0]; // Just handle the first entity for simplicity
+        
+        if (entity.getData('pushable')) {
+          // Handle pushable entities (like boulders)
+          const pushSuccess = this.tryPushEntity(entity, direction);
+          if (!pushSuccess) {
+            isWalkable = false;
+          }
+        } else {
+          // Handle non-pushable entities (like enemies)
+          isWalkable = false;
+        }
       }
     }
     

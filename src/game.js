@@ -50,7 +50,7 @@ try {
       default: 'arcade',
       arcade: {
         gravity: { y: 0 },
-        debug: false  // Set back to false for clean UI
+        debug: false
       }
     },
     input: {

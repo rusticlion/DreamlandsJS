@@ -12,6 +12,14 @@ leverage Phaser's scene management and physics capabilities.
 
 ## Status: ✅ Completed
 
+## Stretch Goal Completed: Entity Management System
+
+As a stretch goal, we implemented a flexible entity management system that:
+1. Provides a unified way to create and manage different types of game entities
+2. Supports various entity states and behaviors
+3. Introduced Sokoban-style pushable boulders
+4. Serves as a foundation for future entity types (NPCs, items, etc.)
+
 ## Visual Context
 
 - **Background**: A teal-green rectangular area fills the main workspace, 
