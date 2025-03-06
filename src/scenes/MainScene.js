@@ -496,12 +496,17 @@ class MainScene extends Phaser.Scene {
       
       // Update scene based on combat results
       if (data && data.victory && data.enemyId) {
-        // Find and remove the defeated enemy
-        const defeatedEnemy = this.enemies.getChildren().find(
+        // Find the defeated enemy from our entity registry
+        const defeatedEnemy = this.entities.enemies.getChildren().find(
           enemy => enemy.getData('id') === data.enemyId
         );
         
         if (defeatedEnemy) {
+          // Remove from all entity collections
+          this.entities.enemies.remove(defeatedEnemy);
+          this.allEntities.remove(defeatedEnemy);
+          
+          // Destroy the enemy sprite
           defeatedEnemy.destroy();
         }
         
