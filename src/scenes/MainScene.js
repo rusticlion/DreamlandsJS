@@ -496,18 +496,32 @@ class MainScene extends Phaser.Scene {
       
       // Update scene based on combat results
       if (data && data.victory && data.enemyId) {
+        console.log('Looking for enemy with ID:', data.enemyId);
+        
+        // Debug log to check all enemy IDs
+        const allEnemyIds = this.entities.enemies.getChildren().map(enemy => enemy.getData('id'));
+        console.log('Available enemy IDs:', allEnemyIds);
+        
         // Find the defeated enemy from our entity registry
         const defeatedEnemy = this.entities.enemies.getChildren().find(
           enemy => enemy.getData('id') === data.enemyId
         );
         
+        console.log('Found enemy?', defeatedEnemy ? 'Yes' : 'No');
+        
         if (defeatedEnemy) {
+          console.log('Removing enemy with ID:', defeatedEnemy.getData('id'));
+          
           // Remove from all entity collections
           this.entities.enemies.remove(defeatedEnemy);
           this.allEntities.remove(defeatedEnemy);
           
           // Destroy the enemy sprite
           defeatedEnemy.destroy();
+          
+          console.log('Enemy removed successfully');
+        } else {
+          console.error('Failed to find enemy with ID:', data.enemyId);
         }
         
         // Show victory message
@@ -832,10 +846,14 @@ class MainScene extends Phaser.Scene {
       enemy.wobble = null;
     }
     
+    // Debug log the enemy ID we're storing
+    const enemyId = enemy.getData('id');
+    console.log('Starting combat with enemy ID:', enemyId);
+    
     // Set combat state
     gameState.combatActive = true;
     gameState.currentEnemy = {
-      id: enemy.getData('id'),
+      id: enemyId,
       type: 'basic',
       health: 50
     };
