@@ -27,20 +27,42 @@ class MainScene extends Phaser.Scene {
     this.load.image('tiles', 'assets/tileset.png');
     this.load.tilemapTiledJSON('map', 'assets/map.json');
     
-    // Create a simple enemy sprite as a rectangle (for prototype)
-    const enemyGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+    // Load a custom enemy texture directly, avoiding texture generation
+    // which might cause issues in the deployed version
+    this.createEnemyTexture();
+  }
+  
+  // Create enemy texture in a more reliable way
+  createEnemyTexture() {
+    // Check if texture already exists
+    if (this.textures.exists('enemy')) return;
     
-    // Use a lighter brown color to make the burgundy tint more noticeable
-    enemyGraphics.fillStyle(0x8B7355); // Lighter brown color
+    // Create canvas element for drawing
+    const size = 16; // Single tile size
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
     
-    // Make it a single tile size for perfect alignment
-    enemyGraphics.fillRect(0, 0, this.tileSize, this.tileSize);
+    // Get context and draw enemy
+    const ctx = canvas.getContext('2d');
     
-    // Add a black outline for visibility
-    enemyGraphics.lineStyle(1, 0x000000);
-    enemyGraphics.strokeRect(0, 0, this.tileSize, this.tileSize);
+    // Fill with red color for high visibility
+    ctx.fillStyle = '#aa5500';
+    ctx.fillRect(0, 0, size, size);
     
-    enemyGraphics.generateTexture('enemy', this.tileSize, this.tileSize);
+    // Add border
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, size, size);
+    
+    // Add simple face details 
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(4, 4, 2, 2); // Left eye
+    ctx.fillRect(10, 4, 2, 2); // Right eye
+    ctx.fillRect(5, 10, 6, 2); // Mouth
+    
+    // Create texture from canvas
+    this.textures.addCanvas('enemy', canvas);
   }
 
   create() {
@@ -310,36 +332,33 @@ class MainScene extends Phaser.Scene {
     // Create an enemies group with physics
     this.enemies = this.physics.add.group();
     
-    // Create a few enemies positioned around the map
-    // Align enemies to exact tile positions, accounting for any offset
-    // This time let's use integer multiples of the tile size without any additional offset
+    // Create enemies at specific tile positions
+    // Place them where they should be clearly visible
     const enemyPositions = [
-      { x: 5 * this.tileSize, y: 3 * this.tileSize, id: 'enemy1' },
-      { x: 10 * this.tileSize, y: 7 * this.tileSize, id: 'enemy2' },
-      { x: 4 * this.tileSize, y: 7 * this.tileSize, id: 'enemy3' }
+      { x: 5, y: 3, id: 'enemy1' },
+      { x: 10, y: 7, id: 'enemy2' },
+      { x: 3, y: 7, id: 'enemy3' }
     ];
     
     enemyPositions.forEach(pos => {
-      const enemy = this.enemies.create(pos.x, pos.y, 'enemy');
+      // Convert tile coordinates to pixel coordinates
+      const pixelX = (pos.x * this.tileSize) + (this.tileSize / 2);
+      const pixelY = (pos.y * this.tileSize) + (this.tileSize / 2);
       
-      // Set the origin to 0.5 to ensure it's centered properly
+      // Create the enemy sprite
+      const enemy = this.enemies.create(pixelX, pixelY, 'enemy');
+      
+      // Set the origin to center
       enemy.setOrigin(0.5, 0.5);
       
-      // Make sure it doesn't move with physics
+      // Make it immovable
       enemy.setImmovable(true);
       
-      // Store data on the enemy sprite
+      // Store the enemy ID
       enemy.setData('id', pos.id);
-      enemy.setData('isEnemy', true);
-      enemy.setData('originalTint', enemy.tint);
       
-      // Add collision - set a physics body to match tile size
+      // Set up collision
       enemy.body.setSize(this.tileSize, this.tileSize);
-      
-      // Debug outline to see the actual collision body
-      if (this.physics.config.debug) {
-        enemy.body.debugShowBody = true;
-      }
     });
     
     // Add overlap detection between player and enemies
@@ -481,34 +500,37 @@ class MainScene extends Phaser.Scene {
   
   // Helper method to create the combat prompt
   createCombatPrompt(enemy) {
-    // Create a background for the prompt
+    // Create a very visible prompt in the center of the screen
     const promptBg = this.add.rectangle(
-      enemy.x,
-      enemy.y - 20,
-      140,
-      16,
-      0x000000,
+      120, // Center X
+      20,  // Top of screen
+      200, // Wide enough for text
+      20,  // Tall enough for text
+      0xFF0000, // Bright red
       0.8
     ).setOrigin(0.5);
-    promptBg.setStrokeStyle(2, 0xFF0000);
+    promptBg.setScrollFactor(0); // Fixed on screen
     
-    // Add text on top
+    // Add bold text
     const promptText = this.add.text(
-      enemy.x,
-      enemy.y - 20,
+      120, // Center X
+      20,  // Top of screen
       'PRESS SPACE TO FIGHT!',
       {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '6px',
+        fontFamily: 'Arial',
+        fontSize: '10px',
+        fontStyle: 'bold',
         fill: '#FFFFFF',
       }
     ).setOrigin(0.5);
+    promptText.setScrollFactor(0); // Fixed on screen
     
-    // Make the prompt bob up and down for attention
+    // Make it pulse for attention
     this.tweens.add({
       targets: [promptBg, promptText],
-      y: '+=4',
-      duration: 500,
+      scaleX: 1.1,
+      scaleY: 1.1,
+      duration: 300,
       yoyo: true,
       repeat: -1
     });
@@ -574,11 +596,12 @@ class MainScene extends Phaser.Scene {
   update() {
     if (!this.playerContainer || this.isMoving) return;
     
-    // Top priority: Check for combat initiation with spacebar globally
+    // Simplest possible combat detection: 
+    // Check for spacebar press and find close enemy
     if (this.cursors && this.cursors.space && Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
       // Find the closest enemy
       let closestEnemy = null;
-      let minDistance = 40; // Detection radius threshold
+      let minDistance = 40; // Detection radius in pixels
       
       if (this.enemies) {
         this.enemies.getChildren().forEach(enemy => {
@@ -601,33 +624,9 @@ class MainScene extends Phaser.Scene {
       }
     }
     
-    // Check for enemy proximity using physics system
+    // Simple enemy proximity check
     if (this.enemies && this.playerContainer) {
       let enemyNearby = false;
-      
-      // Always create a visual indicator for debugging
-      if (!this.debugText) {
-        this.debugText = this.add.text(10, 10, '', {
-          fontFamily: 'monospace',
-          fontSize: '8px',
-          fill: '#ffffff',
-          backgroundColor: '#000000',
-          padding: { x: 2, y: 2 }
-        });
-        this.debugText.setScrollFactor(0);
-        this.debugText.setDepth(1000);
-      }
-      
-      // Check and display player's current grid position for debugging
-      const playerTileX = Math.floor(this.playerContainer.x / this.tileSize);
-      const playerTileY = Math.floor(this.playerContainer.y / this.tileSize);
-      
-      // Build debug info
-      let debugInfo = `Player: (${Math.floor(this.playerContainer.x)}, ${Math.floor(this.playerContainer.y)})`;
-      
-      // Process each enemy
-      let closestEnemy = null;
-      let closestDistance = Infinity;
       
       this.enemies.getChildren().forEach(enemy => {
         // Check distance to enemy
@@ -638,45 +637,16 @@ class MainScene extends Phaser.Scene {
           enemy.y
         );
         
-        // Track closest enemy for focused debugging
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestEnemy = enemy;
-        }
-        
-        // Add visible detection radius - helps see where detection should happen
-        if (!enemy.detectionCircle) {
-          enemy.detectionCircle = this.add.circle(enemy.x, enemy.y, 40, 0xff0000, 0.2);
-        }
-        
-        // Create a visual line from player to enemy for distance visualization
-        if (!enemy.distanceLine) {
-          enemy.distanceLine = this.add.line(0, 0, 
-            this.playerContainer.x, this.playerContainer.y, 
-            enemy.x, enemy.y, 
-            0xffff00, 0.3);
-        } else {
-          // Update line position
-          enemy.distanceLine.setTo(
-            this.playerContainer.x, this.playerContainer.y, 
-            enemy.x, enemy.y
-          );
-        }
-        
-        // Update line alpha based on distance - makes it easy to see when close
-        const lineAlpha = distance < 40 ? 0.8 : 0.3;
-        enemy.distanceLine.setAlpha(lineAlpha);
-        
-        // If player is close to an enemy - use a larger detection radius for more reliable detection
+        // Simple highlight logic - if close, highlight enemy
         if (distance < 40) {  // 40 pixel detection radius
-          // Use a very noticeable dark red tint
+          // Tint enemy red when in range
           enemy.setTint(0xFF0000); 
           
-          // Add a pulsing effect for better visibility
-          if (!enemy.pulseEffect) {
-            enemy.pulseEffect = this.tweens.add({
+          // Add simple tween if not already added
+          if (!enemy.wobble) {
+            enemy.wobble = this.tweens.add({
               targets: enemy,
-              alpha: { from: 1, to: 0.6 },
+              y: enemy.y - 4,
               duration: 500,
               yoyo: true,
               repeat: -1
@@ -689,39 +659,24 @@ class MainScene extends Phaser.Scene {
           if (!this.combatPrompt) {
             this.createCombatPrompt(enemy);
           }
-          
-          // We now handle combat initiation at the beginning of update with global detection
         } else {
-          // If not close, reset tint and stop pulsing
+          // Reset enemy appearance when not in range
           enemy.clearTint();
           
-          // Stop pulsing effect if it exists
-          if (enemy.pulseEffect) {
-            enemy.pulseEffect.stop();
-            enemy.pulseEffect = null;
-            enemy.setAlpha(1);
+          // Stop wobble animation
+          if (enemy.wobble) {
+            enemy.wobble.stop();
+            enemy.wobble = null;
+            enemy.y = Math.floor(enemy.y); // Reset to integer position
           }
         }
       });
       
-      // If no enemies nearby, remove the combat prompt
+      // Clear combat prompt if no enemies nearby
       if (!enemyNearby && this.combatPrompt) {
-        // Clean up all prompt elements
         this.combatPrompt.bg.destroy();
         this.combatPrompt.text.destroy();
         this.combatPrompt = null;
-      }
-      
-      // Update debug text with the most relevant info
-      if (this.debugText) {
-        if (closestEnemy) {
-          const enemyId = closestEnemy.getData('id');
-          debugInfo += `\nClosest: ${enemyId} (${Math.floor(closestDistance)}px)`;
-          if (closestDistance < 40) {
-            debugInfo += '\nIn range! Press SPACE';
-          }
-        }
-        this.debugText.setText(debugInfo);
       }
     }
     
