@@ -574,19 +574,63 @@ class MainScene extends Phaser.Scene {
   update() {
     if (!this.playerContainer || this.isMoving) return;
     
+    // Top priority: Check for combat initiation with spacebar globally
+    if (this.cursors && this.cursors.space && Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
+      // Find the closest enemy
+      let closestEnemy = null;
+      let minDistance = 40; // Detection radius threshold
+      
+      if (this.enemies) {
+        this.enemies.getChildren().forEach(enemy => {
+          const distance = Phaser.Math.Distance.Between(
+            this.playerContainer.x, this.playerContainer.y,
+            enemy.x, enemy.y
+          );
+          
+          if (distance < minDistance) {
+            closestEnemy = enemy;
+            minDistance = distance;
+          }
+        });
+        
+        // If we found an enemy in range, start combat
+        if (closestEnemy) {
+          this.startCombat(closestEnemy);
+          return; // Skip rest of update if we're entering combat
+        }
+      }
+    }
+    
     // Check for enemy proximity using physics system
     if (this.enemies && this.playerContainer) {
       let enemyNearby = false;
+      
+      // Always create a visual indicator for debugging
+      if (!this.debugText) {
+        this.debugText = this.add.text(10, 10, '', {
+          fontFamily: 'monospace',
+          fontSize: '8px',
+          fill: '#ffffff',
+          backgroundColor: '#000000',
+          padding: { x: 2, y: 2 }
+        });
+        this.debugText.setScrollFactor(0);
+        this.debugText.setDepth(1000);
+      }
       
       // Check and display player's current grid position for debugging
       const playerTileX = Math.floor(this.playerContainer.x / this.tileSize);
       const playerTileY = Math.floor(this.playerContainer.y / this.tileSize);
       
-      // Show position data clearly in console
-      console.log(`Player position: (${this.playerContainer.x}, ${this.playerContainer.y}), Tile: (${playerTileX}, ${playerTileY})`);
+      // Build debug info
+      let debugInfo = `Player: (${Math.floor(this.playerContainer.x)}, ${Math.floor(this.playerContainer.y)})`;
+      
+      // Process each enemy
+      let closestEnemy = null;
+      let closestDistance = Infinity;
       
       this.enemies.getChildren().forEach(enemy => {
-        // Check both distance and physics overlap
+        // Check distance to enemy
         const distance = Phaser.Math.Distance.Between(
           this.playerContainer.x,
           this.playerContainer.y,
@@ -594,21 +638,37 @@ class MainScene extends Phaser.Scene {
           enemy.y
         );
         
-        // Debug output to see all distances
-        console.log(`Distance to ${enemy.getData('id')}: ${distance}`);
+        // Track closest enemy for focused debugging
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestEnemy = enemy;
+        }
         
-        // Check if bodies are overlapping or very close
-        const bodyDistance = Phaser.Math.Distance.Between(
-          this.playerContainer.body.center.x,
-          this.playerContainer.body.center.y,
-          enemy.body.center.x,
-          enemy.body.center.y
-        );
+        // Add visible detection radius - helps see where detection should happen
+        if (!enemy.detectionCircle) {
+          enemy.detectionCircle = this.add.circle(enemy.x, enemy.y, 40, 0xff0000, 0.2);
+        }
         
-        console.log(`Body center distance to ${enemy.getData('id')}: ${bodyDistance}`);
+        // Create a visual line from player to enemy for distance visualization
+        if (!enemy.distanceLine) {
+          enemy.distanceLine = this.add.line(0, 0, 
+            this.playerContainer.x, this.playerContainer.y, 
+            enemy.x, enemy.y, 
+            0xffff00, 0.3);
+        } else {
+          // Update line position
+          enemy.distanceLine.setTo(
+            this.playerContainer.x, this.playerContainer.y, 
+            enemy.x, enemy.y
+          );
+        }
+        
+        // Update line alpha based on distance - makes it easy to see when close
+        const lineAlpha = distance < 40 ? 0.8 : 0.3;
+        enemy.distanceLine.setAlpha(lineAlpha);
         
         // If player is close to an enemy - use a larger detection radius for more reliable detection
-        if (distance < 40) {  // Increased from 28 to 40 for wider detection
+        if (distance < 40) {  // 40 pixel detection radius
           // Use a very noticeable dark red tint
           enemy.setTint(0xFF0000); 
           
@@ -630,10 +690,7 @@ class MainScene extends Phaser.Scene {
             this.createCombatPrompt(enemy);
           }
           
-          // If spacebar is pressed, start combat
-          if (this.cursors.space && Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
-            this.startCombat(enemy);
-          }
+          // We now handle combat initiation at the beginning of update with global detection
         } else {
           // If not close, reset tint and stop pulsing
           enemy.clearTint();
@@ -653,6 +710,18 @@ class MainScene extends Phaser.Scene {
         this.combatPrompt.bg.destroy();
         this.combatPrompt.text.destroy();
         this.combatPrompt = null;
+      }
+      
+      // Update debug text with the most relevant info
+      if (this.debugText) {
+        if (closestEnemy) {
+          const enemyId = closestEnemy.getData('id');
+          debugInfo += `\nClosest: ${enemyId} (${Math.floor(closestDistance)}px)`;
+          if (closestDistance < 40) {
+            debugInfo += '\nIn range! Press SPACE';
+          }
+        }
+        this.debugText.setText(debugInfo);
       }
     }
     

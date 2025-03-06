@@ -50,7 +50,7 @@ try {
       default: 'arcade',
       arcade: {
         gravity: { y: 0 },
-        debug: true  // Turn on debug temporarily to see physics bodies
+        debug: false  // Set back to false for clean UI
       }
     },
     input: {
