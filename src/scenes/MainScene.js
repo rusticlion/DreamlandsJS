@@ -337,45 +337,43 @@ class MainScene extends Phaser.Scene {
   }
   
   setupEnemies() {
-    // Get reference to global gameState
-    const gameState = window.gameState;
+    console.log("Setting up enemies");
     
-    // Create an enemies group with physics
-    this.enemies = this.physics.add.group();
+    // Create enemies group (using normal sprites instead of physics for simplicity)
+    this.enemies = this.add.group();
     
-    // Create enemies at specific tile positions
-    // Place them where they should be clearly visible
+    // Create enemies at specific positions (using absolute pixel positions)
+    // Placing them in very visible positions
     const enemyPositions = [
-      { x: 5, y: 3, id: 'enemy1' },
-      { x: 10, y: 7, id: 'enemy2' },
-      { x: 3, y: 7, id: 'enemy3' }
+      { x: 80, y: 48, id: 'enemy1' },
+      { x: 160, y: 112, id: 'enemy2' },
+      { x: 48, y: 112, id: 'enemy3' },
+      // Add one right where player starts for immediate testing
+      { x: 48, y: 48, id: 'enemy_test' }
     ];
     
+    console.log(`Creating ${enemyPositions.length} enemies`);
+    
+    // Create each enemy directly without physics to avoid any issues
     enemyPositions.forEach(pos => {
-      // Convert tile coordinates to pixel coordinates
-      const pixelX = (pos.x * this.tileSize) + (this.tileSize / 2);
-      const pixelY = (pos.y * this.tileSize) + (this.tileSize / 2);
-      
-      // Create the enemy sprite
-      const enemy = this.enemies.create(pixelX, pixelY, 'enemy');
-      
-      // Set the origin to center
+      // Create basic sprite
+      const enemy = this.add.sprite(pos.x, pos.y, 'enemy');
       enemy.setOrigin(0.5, 0.5);
       
-      // Make it immovable
-      enemy.setImmovable(true);
-      
-      // Store the enemy ID
+      // Store ID and make it larger for visibility
       enemy.setData('id', pos.id);
+      enemy.setScale(1.5);
       
-      // Set up collision
-      enemy.body.setSize(this.tileSize, this.tileSize);
+      // Add to the group
+      this.enemies.add(enemy);
+      
+      console.log(`Created enemy ${pos.id} at ${pos.x}, ${pos.y}`);
     });
     
-    // Add overlap detection between player and enemies
-    // If using the player container for overlap doesn't work well,
-    // we can use a physics body for detection instead
-    
+    console.log(`Total enemies created: ${this.enemies.getChildren().length}`);
+  }
+  
+  setupCombatListeners() {
     // Ensure the player container has a physics body for easier detection in update()
     if (this.playerContainer) {
       // Make sure the player's physics body is set up correctly
@@ -611,29 +609,50 @@ class MainScene extends Phaser.Scene {
     let closestEnemy = null;
     let minDistance = Infinity;
     
+    // Always update the debug display with player position, even if enemies aren't found
+    const playerPos = this.playerContainer ? 
+      `Player: ${Math.round(this.playerContainer.x)},${Math.round(this.playerContainer.y)}` : 
+      'Player: not found';
+      
+    // Basic enemy count check
+    const enemyCount = this.enemies ? this.enemies.getChildren().length : 0;
+    const enemyCountText = `Enemies: ${enemyCount}`;
+    
     // Check all enemies and find the closest one
     if (this.enemies && this.playerContainer) {
-      this.enemies.getChildren().forEach(enemy => {
-        // Calculate distance to this enemy
-        const distance = Phaser.Math.Distance.Between(
-          this.playerContainer.x, this.playerContainer.y,
-          enemy.x, enemy.y
-        );
-        
-        // Keep track of the closest enemy and distance
-        if (distance < minDistance) {
-          closestEnemy = enemy;
-          minDistance = distance;
-        }
-      });
+      // Print direct debug to console
+      console.log(`Player position: ${this.playerContainer.x}, ${this.playerContainer.y}`);
+      console.log(`Enemy count: ${enemyCount}`);
+      
+      if (enemyCount > 0) {
+        this.enemies.getChildren().forEach(enemy => {
+          // Log each enemy position
+          console.log(`Enemy at: ${enemy.x}, ${enemy.y}`);
+          
+          // Calculate distance to this enemy
+          const distance = Phaser.Math.Distance.Between(
+            this.playerContainer.x, this.playerContainer.y,
+            enemy.x, enemy.y
+          );
+          
+          console.log(`Distance to enemy: ${distance}`);
+          
+          // Keep track of the closest enemy and distance
+          if (distance < minDistance) {
+            closestEnemy = enemy;
+            minDistance = distance;
+          }
+        });
+      }
       
       // Update the distance display
       if (this.distanceDisplay) {
         if (closestEnemy) {
           this.distanceDisplay.setText(
             `Enemy: ${Math.round(minDistance)}px\n` +
-            `Player: ${Math.round(this.playerContainer.x)},${Math.round(this.playerContainer.y)}\n` +
-            `Enemy: ${Math.round(closestEnemy.x)},${Math.round(closestEnemy.y)}`
+            playerPos + '\n' +
+            `Enemy: ${Math.round(closestEnemy.x)},${Math.round(closestEnemy.y)}\n` + 
+            enemyCountText
           );
           
           // Change color based on distance
@@ -645,8 +664,22 @@ class MainScene extends Phaser.Scene {
             this.distanceDisplay.setFill('#ffffff');
           }
         } else {
-          this.distanceDisplay.setText('No enemies found');
+          this.distanceDisplay.setText(
+            `No enemies in range\n` +
+            playerPos + '\n' + 
+            enemyCountText
+          );
         }
+      }
+    } else {
+      // Update display with whatever information we have
+      if (this.distanceDisplay) {
+        this.distanceDisplay.setText(
+          `System state:\n` +
+          playerPos + '\n' + 
+          enemyCountText + '\n' + 
+          `Enemies group: ${this.enemies ? 'exists' : 'null'}`
+        );
       }
     }
     
