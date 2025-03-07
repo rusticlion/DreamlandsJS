@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import CombatScene from './scenes/CombatScene';
 import PreloadScene from './scenes/PreloadScene';
 import RoomScene from './scenes/RoomScene';
+import StateManager from './StateManager';
 
 // Error handling function
 function handleError(error) {
@@ -20,6 +21,12 @@ function handleError(error) {
 }
 
 try {
+  // Initialize StateManager
+  const stateManager = new StateManager();
+  
+  // Try to load existing save data
+  stateManager.loadFromLocalStorage();
+  
   // Game configuration
   const config = {
     type: Phaser.AUTO,
@@ -48,9 +55,32 @@ try {
 
   // Initialize the game
   const game = new Phaser.Game(config);
+  
+  // Store stateManager in the game registry for global access
+  game.registry.set('stateManager', stateManager);
 
   // Add game to window for debugging
   window.game = game;
+  
+  // Auto-save every minute
+  setInterval(() => {
+    stateManager.saveToLocalStorage();
+    console.log('Auto-saving game state...');
+  }, 60000);
+  
+  // Save game state when the window is closed or refreshed
+  window.addEventListener('beforeunload', () => {
+    stateManager.saveToLocalStorage();
+    console.log('Saving game state before unload...');
+  });
+  
+  // Save game state when the user switches tabs
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      stateManager.saveToLocalStorage();
+      console.log('Saving game state when switching away...');
+    }
+  });
   
 } catch (error) {
   handleError(error);

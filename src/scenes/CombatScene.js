@@ -10,11 +10,11 @@ class CombatScene extends Phaser.Scene {
   }
 
   create() {
-    // Get reference to the global gameState
-    const gameState = window.gameState;
+    // Get reference to the stateManager
+    const stateManager = this.registry.get('stateManager');
     
     // Store the calling scene key
-    this.callingSceneKey = gameState.callingSceneKey || 'RoomScene';
+    this.callingSceneKey = stateManager.callingSceneKey || 'RoomScene';
     
     // Reset camera position and setup
     this.cameras.main.setPosition(0, 0);
@@ -45,7 +45,10 @@ class CombatScene extends Phaser.Scene {
       fill: '#ffffff'
     }).setScrollFactor(0);
     
-    const healthText = this.add.text(50, 40, gameState.player.health.toString(), {
+    // Get player data from state manager
+    const playerData = stateManager.getPlayerData();
+    
+    const healthText = this.add.text(50, 40, playerData.health.toString(), {
       fontFamily: '"Press Start 2P"',
       fontSize: '8px',
       fill: '#88ff88'
@@ -60,7 +63,7 @@ class CombatScene extends Phaser.Scene {
     
     // Display each body part and its status
     let yPos = 65;
-    gameState.player.bodyParts.forEach(part => {
+    playerData.bodyParts.forEach(part => {
       this.add.text(30, yPos, `${part.name}:`, {
         fontFamily: '"Press Start 2P"',
         fontSize: '6px',
@@ -116,26 +119,33 @@ class CombatScene extends Phaser.Scene {
   }
   
   endCombat(victory) {
-    const gameState = window.gameState;
+    const stateManager = this.registry.get('stateManager');
+    const playerData = stateManager.getPlayerData();
+    
     const resultData = victory ? 
-      { victory: true, player: gameState.player, enemyId: gameState.currentEnemy?.id } : 
-      { victory: false, player: gameState.player };
+      { victory: true, player: playerData, enemyId: stateManager.currentEnemy?.id } : 
+      { victory: false, player: playerData };
     
     if (victory) {
       // Handle victory outcome
-      gameState.player.health = Math.min(100, gameState.player.health + 20);
+      stateManager.playerHealth = Math.min(100, stateManager.playerHealth + 20);
     } else {
       // Handle defeat outcome
-      gameState.player.health = Math.max(0, gameState.player.health - 20);
+      stateManager.playerHealth = Math.max(0, stateManager.playerHealth - 20);
       
       // Randomly damage a body part
-      const randomPart = gameState.player.bodyParts[Math.floor(Math.random() * gameState.player.bodyParts.length)];
+      const updatedPlayerData = stateManager.getPlayerData();
+      const randomPart = updatedPlayerData.bodyParts[Math.floor(Math.random() * updatedPlayerData.bodyParts.length)];
       randomPart.status = 'damaged';
+      stateManager.setPlayerData(updatedPlayerData);
     }
     
     // Clear combat state
-    gameState.combatActive = false;
-    gameState.currentEnemy = null;
+    stateManager.combatActive = false;
+    stateManager.currentEnemy = null;
+    
+    // Save the game state after combat
+    stateManager.saveToLocalStorage();
     
     // Fade out and then resume the calling scene
     this.cameras.main.fadeOut(500, 0, 0, 0, (camera, progress) => {

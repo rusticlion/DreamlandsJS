@@ -30,3 +30,5 @@ Acceptance Criteria:
 Game runs without errors using stateManager.
 Scenes access and modify state via stateManager (e.g., health updates in 
 CombatScene).
+
+🐱💤

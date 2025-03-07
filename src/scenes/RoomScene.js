@@ -24,12 +24,14 @@ class RoomScene extends Phaser.Scene {
   
   // Initialize the scene with room ID
   init(data) {
-    // Use gameState.nextRoomId if available, otherwise use data.roomId or default to 'room1'
-    const gameState = window.gameState;
-    this.roomId = gameState.nextRoomId || data.roomId || 'room1';
+    // Get the stateManager from registry
+    const stateManager = this.registry.get('stateManager');
+    
+    // Use stateManager.nextRoomId if available, otherwise use data.roomId or default to 'room1'
+    this.roomId = stateManager.nextRoomId || data.roomId || 'room1';
     
     // Clear the nextRoomId so it doesn't affect future scene starts
-    gameState.nextRoomId = null;
+    stateManager.nextRoomId = null;
     
     console.log(`Initializing RoomScene with roomId: ${this.roomId}`);
   }
@@ -41,17 +43,14 @@ class RoomScene extends Phaser.Scene {
   create() {
     console.log(`Creating room: ${this.roomId}`);
     
-    // Update gameState's current room ID
-    const gameState = window.gameState;
-    gameState.currentRoomId = this.roomId;
+    // Get the stateManager from registry
+    const stateManager = this.registry.get('stateManager');
     
-    // Ensure room state exists in gameState
-    if (!gameState.rooms[this.roomId]) {
-      gameState.rooms[this.roomId] = { entities: {} };
-    }
+    // Update stateManager's current room ID
+    stateManager.currentRoomId = this.roomId;
     
-    // Get room data from gameState
-    const roomData = gameState.roomsData[this.roomId];
+    // Get room data from stateManager
+    const roomData = stateManager.roomsData[this.roomId];
     
     if (!roomData) {
       console.error(`No room data found for roomId: ${this.roomId}`);
@@ -92,6 +91,9 @@ class RoomScene extends Phaser.Scene {
     
     // Add room info display
     this.setupRoomInfoDisplay();
+    
+    // Add save/load UI
+    this.setupSaveLoadUI();
     
     // Apply camera fade in effect
     this.cameras.main.fadeIn(500, 0, 0, 0);
@@ -344,8 +346,12 @@ class RoomScene extends Phaser.Scene {
       return;
     }
     
-    const gameState = window.gameState;
-    const persistedEntities = gameState.rooms[this.roomId]?.entities || {};
+    // Get the stateManager from registry
+    const stateManager = this.registry.get('stateManager');
+    const persistedEntities = stateManager.getRoomEntities(this.roomId);
+    
+    // Get room state for entity modifications
+    const roomState = stateManager.getRoomState(this.roomId);
     
     // Process each entity from room data
     roomData.entities.forEach(initialData => {
@@ -359,17 +365,30 @@ class RoomScene extends Phaser.Scene {
       // Check if entity has persisted state data
       const persistedState = persistedEntities[id];
       
+      // Get entity state from room state
+      const entityState = roomState[id];
+      
       // Skip creating entity if it's been marked as inactive (e.g., defeated enemy)
       if (persistedState && persistedState.active === false) {
         console.log(`Skipping inactive entity: ${id}`);
         return;
       }
       
-      // Create the entity with either persisted or initial data
+      // Skip creating enemy if it's been defeated in room state
+      if (type === 'enemy' && entityState && entityState.defeated) {
+        console.log(`Skipping defeated enemy: ${id}`);
+        return;
+      }
+      
+      // Use state position if available
+      const gridX = entityState?.x || x;
+      const gridY = entityState?.y || y;
+      
+      // Create the entity with either persisted/state data or initial data
       this.createEntity({
         type: type,
-        gridX: x,
-        gridY: y,
+        gridX: gridX,
+        gridY: gridY,
         id: id,
         properties: properties
       });
@@ -419,18 +438,16 @@ class RoomScene extends Phaser.Scene {
     // Add to master entities list
     this.allEntities.add(entity);
     
-    // Store entity data in gameState
-    const gameState = window.gameState;
+    // Store entity data in stateManager
+    const stateManager = this.registry.get('stateManager');
     
-    if (gameState.rooms && gameState.rooms[this.roomId]) {
-      gameState.rooms[this.roomId].entities[config.id] = {
-        type: config.type,
-        gridX: config.gridX,
-        gridY: config.gridY,
-        properties: config.properties,
-        active: true
-      };
-    }
+    stateManager.updateRoomEntity(this.roomId, config.id, {
+      type: config.type,
+      gridX: config.gridX,
+      gridY: config.gridY,
+      properties: config.properties,
+      active: true
+    });
     
     return entity;
   }
@@ -466,14 +483,18 @@ class RoomScene extends Phaser.Scene {
           this.entities.enemies.remove(this._currentCombatEnemy);
           this.allEntities.remove(this._currentCombatEnemy);
           
-          // Update gameState to mark this enemy as inactive
+          // Update stateManager to mark this enemy as inactive and defeated
           const enemyId = this._currentCombatEnemy.getData('id');
-          const gameState = window.gameState;
+          const stateManager = this.registry.get('stateManager');
           
-          if (gameState.rooms && gameState.rooms[this.roomId] && 
-              gameState.rooms[this.roomId].entities[enemyId]) {
-            gameState.rooms[this.roomId].entities[enemyId].active = false;
-          }
+          // Update the enemy state in the stateManager (for compatibility)
+          stateManager.updateRoomEntity(this.roomId, enemyId, { active: false });
+          
+          // Also mark the enemy as defeated in the room state
+          stateManager.setRoomState(this.roomId, enemyId, { 
+            defeated: true,
+            engaged: false
+          });
           
           // Destroy the enemy sprite
           this._currentCombatEnemy.destroy();
@@ -502,8 +523,8 @@ class RoomScene extends Phaser.Scene {
   }
   
   setupPlayerHealthDisplay() {
-    // Get reference to global gameState
-    const gameState = window.gameState;
+    // Get reference to stateManager
+    const stateManager = this.registry.get('stateManager');
     
     // Create a health display container in the top-right corner
     const healthContainer = this.add.container(220, 10);
@@ -521,7 +542,7 @@ class RoomScene extends Phaser.Scene {
     }).setOrigin(0.5);
     
     // Create health text
-    this.healthText = this.add.text(5, 0, gameState.player.health.toString(), {
+    this.healthText = this.add.text(5, 0, stateManager.playerHealth.toString(), {
       fontFamily: '"Press Start 2P"',
       fontSize: '8px',
       fill: '#ffffff'
@@ -551,19 +572,157 @@ class RoomScene extends Phaser.Scene {
     // Add all elements to the container
     roomInfoContainer.add([roomInfoBg, this.roomInfoText]);
   }
+  
+  // Set up Save/Load UI
+  setupSaveLoadUI() {
+    // Get reference to stateManager
+    const stateManager = this.registry.get('stateManager');
+    
+    // Create a container for the save/load UI in the top-left corner
+    const saveLoadContainer = this.add.container(20, 10);
+    saveLoadContainer.setScrollFactor(0); // Fixed on screen
+    
+    // Create a background for the save button
+    const saveButtonBg = this.add.rectangle(0, 0, 40, 16, 0x000088, 0.7);
+    saveButtonBg.setStrokeStyle(1, 0x8888ff);
+    saveButtonBg.setInteractive({ useHandCursor: true });
+    
+    // Create save button text
+    const saveButtonText = this.add.text(0, 0, 'SAVE', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      fill: '#ffffff'
+    }).setOrigin(0.5);
+    
+    // Create a background for the load button
+    const loadButtonBg = this.add.rectangle(50, 0, 40, 16, 0x880000, 0.7);
+    loadButtonBg.setStrokeStyle(1, 0xff8888);
+    loadButtonBg.setInteractive({ useHandCursor: true });
+    
+    // Create load button text
+    const loadButtonText = this.add.text(50, 0, 'LOAD', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      fill: '#ffffff'
+    }).setOrigin(0.5);
+    
+    // Add all elements to the container
+    saveLoadContainer.add([saveButtonBg, saveButtonText, loadButtonBg, loadButtonText]);
+    
+    // Set up button interactions
+    saveButtonBg.on('pointerover', () => {
+      saveButtonBg.setFillStyle(0x0000aa, 0.9);
+    });
+    
+    saveButtonBg.on('pointerout', () => {
+      saveButtonBg.setFillStyle(0x000088, 0.7);
+    });
+    
+    saveButtonBg.on('pointerup', () => {
+      this.saveGame();
+    });
+    
+    loadButtonBg.on('pointerover', () => {
+      loadButtonBg.setFillStyle(0xaa0000, 0.9);
+    });
+    
+    loadButtonBg.on('pointerout', () => {
+      loadButtonBg.setFillStyle(0x880000, 0.7);
+    });
+    
+    loadButtonBg.on('pointerup', () => {
+      this.loadGame();
+    });
+    
+    // Disable load button if no save exists
+    if (!stateManager.hasSavedGame()) {
+      loadButtonBg.disableInteractive();
+      loadButtonBg.setFillStyle(0x555555, 0.5);
+      loadButtonText.setFill('#888888');
+    }
+  }
+  
+  // Handle save button click
+  saveGame() {
+    // Get stateManager and save game state
+    const stateManager = this.registry.get('stateManager');
+    const saveData = stateManager.saveToLocalStorage();
+    
+    // Show a save notification
+    this.showSaveNotification('Game Saved!', '#88ff88');
+    
+    console.log('Game saved manually', saveData);
+  }
+  
+  // Handle load button click
+  loadGame() {
+    // Get stateManager and try to load game state
+    const stateManager = this.registry.get('stateManager');
+    const loadSuccess = stateManager.loadFromLocalStorage();
+    
+    if (loadSuccess) {
+      // Show a load notification
+      this.showSaveNotification('Game Loaded!', '#8888ff');
+      
+      // Get player data
+      const playerData = stateManager.getPlayerData();
+      
+      // If we have a saved next room, transition to it
+      if (playerData.nextRoom) {
+        console.log(`Loading saved game and transitioning to ${playerData.nextRoom}`);
+        
+        // Fade out and transition
+        this.cameras.main.fadeOut(500, 0, 0, 0, () => {
+          this.scene.restart({ roomId: playerData.nextRoom });
+        });
+      } else {
+        // Otherwise just restart the current scene
+        console.log('Loading saved game in current room');
+        this.scene.restart();
+      }
+    } else {
+      // Show error notification
+      this.showSaveNotification('No Save Found!', '#ff8888');
+    }
+  }
+  
+  // Show save/load notification
+  showSaveNotification(message, color) {
+    // Create notification text centered at the top
+    const notification = this.add.text(
+      120, 40, message, {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '10px',
+        fill: color,
+        stroke: '#000000',
+        strokeThickness: 4,
+        shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, stroke: true, fill: true }
+      }
+    ).setOrigin(0.5).setScrollFactor(0);
+    
+    // Add a simple fade out animation
+    this.tweens.add({
+      targets: notification,
+      alpha: { from: 1, to: 0 },
+      y: { from: 40, to: 30 },
+      duration: 2000,
+      ease: 'Power2',
+      onComplete: () => notification.destroy()
+    });
+  }
 
   updateHealthDisplay() {
-    // Get reference to global gameState
-    const gameState = window.gameState;
+    // Get reference to stateManager
+    const stateManager = this.registry.get('stateManager');
     
     // Update health text
     if (this.healthText) {
-      this.healthText.setText(gameState.player.health.toString());
+      this.healthText.setText(stateManager.playerHealth.toString());
       
       // Change color based on health status
-      if (gameState.player.health < 30) {
+      if (stateManager.playerHealth < 30) {
         this.healthText.setFill('#ff8888');
-      } else if (gameState.player.health < 60) {
+      } else if (stateManager.playerHealth < 60) {
         this.healthText.setFill('#ffff88');
       } else {
         this.healthText.setFill('#88ff88');
@@ -571,7 +730,8 @@ class RoomScene extends Phaser.Scene {
     }
     
     // Check damaged body parts and update player appearance if needed
-    const damagedParts = gameState.player.bodyParts.filter(part => part.status === 'damaged');
+    const playerData = stateManager.getPlayerData();
+    const damagedParts = playerData.bodyParts.filter(part => part.status === 'damaged');
     if (damagedParts.length > 0) {
       // For now, just tint the player red to indicate damage
       if (this.player) {
@@ -706,6 +866,16 @@ class RoomScene extends Phaser.Scene {
       entity.setData('gridX', targetTileX);
       entity.setData('gridY', targetTileY);
       
+      // Get entity ID for state persistence
+      const entityId = entity.getData('id');
+      
+      // Get stateManager and update entity position in room state
+      const stateManager = this.registry.get('stateManager');
+      stateManager.setRoomState(this.roomId, entityId, {
+        x: targetTileX,
+        y: targetTileY
+      });
+      
       // Move entity with a smooth tween
       this.tweens.add({
         targets: entity,
@@ -812,8 +982,8 @@ class RoomScene extends Phaser.Scene {
   }
   
   startCombat(enemy) {
-    // Get reference to global gameState
-    const gameState = window.gameState;
+    // Get reference to stateManager
+    const stateManager = this.registry.get('stateManager');
     
     // Clean up any combat prompt
     if (this.combatPrompt) {
@@ -832,19 +1002,25 @@ class RoomScene extends Phaser.Scene {
     const enemyId = enemy.getData('id');
     console.log('Starting combat with enemy ID:', enemyId);
     
+    // Add enemy to room state as potentially defeated
+    // (will be confirmed after combat concludes)
+    stateManager.setRoomState(this.roomId, enemyId, { 
+      engaged: true 
+    });
+    
     // Store a direct reference to the enemy object for easier retrieval
     this._currentCombatEnemy = enemy;
     
     // Set combat state
-    gameState.combatActive = true;
-    gameState.currentEnemy = {
+    stateManager.combatActive = true;
+    stateManager.currentEnemy = {
       id: enemyId,
       type: 'basic',
       health: 50
     };
     
     // Store the calling scene key
-    gameState.callingSceneKey = this.scene.key;
+    stateManager.callingSceneKey = this.scene.key;
     
     // Show a combat indicator (visual feedback)
     const combatText = this.add.text(
@@ -879,21 +1055,42 @@ class RoomScene extends Phaser.Scene {
   transitionToScene(door) {
     // Get target from door properties
     const targetRoomId = door.getData('targetRoomId') || 'room1';
-    const targetX = door.getData('targetX') * this.tileSize + this.tileSize / 2;
-    const targetY = door.getData('targetY') * this.tileSize + this.tileSize / 2;
     
-    console.log(`Transitioning to room: ${targetRoomId} at (${targetX}, ${targetY})`);
+    // Get the raw grid coordinates for the target position
+    const targetGridX = door.getData('targetX') || 1;
+    const targetGridY = door.getData('targetY') || 1;
+    
+    // Calculate pixel coordinates from grid coordinates
+    const targetX = targetGridX * this.tileSize + this.tileSize / 2;
+    const targetY = targetGridY * this.tileSize + this.tileSize / 2;
+    
+    console.log(`Transitioning to room: ${targetRoomId} at grid position (${targetGridX}, ${targetGridY})`);
     
     // Store room and player position for the new scene
-    const gameState = window.gameState;
-    gameState.nextRoomId = targetRoomId;
-    gameState.nextPlayerX = targetX;
-    gameState.nextPlayerY = targetY;
+    const stateManager = this.registry.get('stateManager');
+    stateManager.nextRoomId = targetRoomId;
+    stateManager.nextPlayerX = targetX;
+    stateManager.nextPlayerY = targetY;
+    
+    // Store player position as part of player data too (more robust)
+    stateManager.setPlayerData({ 
+      nextRoom: targetRoomId,
+      nextGridX: targetGridX, 
+      nextGridY: targetGridY,
+      lastRoom: this.roomId,
+      lastPosition: {
+        x: Math.floor(this.playerContainer.x / this.tileSize),
+        y: Math.floor(this.playerContainer.y / this.tileSize)
+      }
+    });
+    
+    // Save the game state before transition
+    stateManager.saveToLocalStorage();
     
     // Fade out current scene
     this.cameras.main.fadeOut(500, 0, 0, 0, () => {
       this.scene.stop();
-      this.scene.start('RoomScene'); // No need to pass roomId, it will use gameState.nextRoomId
+      this.scene.start('RoomScene'); // No need to pass roomId, it will use stateManager.nextRoomId
     });
   }
 
@@ -1329,12 +1526,31 @@ class RoomScene extends Phaser.Scene {
       }
     }
     
-    // Get player position from gameState or use default
-    const gameState = window.gameState;
+    // Get player position from stateManager or use default
+    const stateManager = this.registry.get('stateManager');
     const startTileX = 1;
     const startTileY = 1;
-    const playerX = gameState.nextPlayerX || (startTileX * tileSize + tileSize/2);
-    const playerY = gameState.nextPlayerY || (startTileY * tileSize + tileSize/2);
+    
+    // First try to get position from player data (more permanent storage)
+    const playerData = stateManager.getPlayerData();
+    
+    // Then fallback to nextPlayerX/Y (for backward compatibility and temporary storage)
+    // Finally use default position if nothing else is available
+    let playerX, playerY;
+    
+    if (playerData.nextGridX !== undefined && playerData.nextGridY !== undefined) {
+      playerX = playerData.nextGridX * tileSize + tileSize/2;
+      playerY = playerData.nextGridY * tileSize + tileSize/2;
+      console.log(`Positioning player using saved grid coordinates: (${playerData.nextGridX}, ${playerData.nextGridY})`);
+    } else if (stateManager.nextPlayerX && stateManager.nextPlayerY) {
+      playerX = stateManager.nextPlayerX;
+      playerY = stateManager.nextPlayerY;
+      console.log(`Positioning player using stateManager coordinates: (${playerX}, ${playerY})`);
+    } else {
+      playerX = startTileX * tileSize + tileSize/2;
+      playerY = startTileY * tileSize + tileSize/2;
+      console.log(`Using default player position: (${startTileX}, ${startTileY})`);
+    }
     
     // Create the player sprite
     this.player = this.physics.add.sprite(0, 0, 'player');
@@ -1363,8 +1579,8 @@ class RoomScene extends Phaser.Scene {
     this.tilemapMode = 'manual';
     
     // Reset the nextPlayerX and nextPlayerY
-    gameState.nextPlayerX = null;
-    gameState.nextPlayerY = null;
+    stateManager.nextPlayerX = null;
+    stateManager.nextPlayerY = null;
   }
 
   // Show prompt for door interaction

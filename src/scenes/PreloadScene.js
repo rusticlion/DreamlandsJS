@@ -138,43 +138,22 @@ class PreloadScene extends Phaser.Scene {
   }
 
   create() {
-    // Initialize gameState if it doesn't exist
-    if (!window.gameState) {
-      window.gameState = {
-        player: {
-          health: 100,
-          bodyParts: [
-            { name: 'Head', status: 'healthy' },
-            { name: 'Arm', status: 'healthy' },
-            { name: 'Leg', status: 'healthy' }
-          ]
-        },
-        currentEnemy: null,
-        combatActive: false,
-        nextPlayerX: null,
-        nextPlayerY: null,
-        nextRoomId: null, // Added for door transitions
-        callingSceneKey: 'RoomScene',
-        rooms: {
-          room1: { entities: {} },
-          room2: { entities: {} },
-          room3: { entities: {} }
-        },
-        roomsData: {} // Central repository for room data
-      };
-    }
+    // Get the stateManager from registry
+    const stateManager = this.registry.get('stateManager');
     
-    // Store room data in gameState
-    window.gameState.roomsData = {
+    // Store room data in stateManager
+    stateManager.roomsData = {
       'room1': this.cache.json.get('room1'),
       'room2': this.cache.json.get('room2'),
       'room3': this.cache.json.get('room3')
     };
     
-    console.log('Room data loaded:', window.gameState.roomsData);
+    console.log('Room data loaded:', stateManager.roomsData);
     
     // Start with RoomScene, passing the initial roomId
-    this.scene.start('RoomScene', { roomId: 'room1' });
+    // If there's a saved nextRoomId, use that, otherwise use room1
+    const startingRoomId = stateManager.nextRoomId || 'room1';
+    this.scene.start('RoomScene', { roomId: startingRoomId });
   }
 }
 

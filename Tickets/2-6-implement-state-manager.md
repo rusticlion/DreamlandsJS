@@ -65,3 +65,5 @@ Acceptance Criteria:
 StateManager class exists with methods for player data and room states.
 Getters/setters mimic gameState properties (e.g., playerHealth).
 saveToLocalStorage serializes state; loadFromLocalStorage restores it.
+
+🐱💤
