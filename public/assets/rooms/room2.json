@@ -1,0 +1,22 @@
+{
+  "id": "room2",
+  "wallData": [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+  ],
+  "entities": [
+    {"type": "enemy", "x": 7, "y": 4, "id": "enemy_r2_1", "properties": {"interactionType": "combat", "pushable": false}},
+    {"type": "enemy", "x": 9, "y": 6, "id": "enemy_r2_2", "properties": {"interactionType": "combat", "pushable": false}},
+    {"type": "boulder", "x": 5, "y": 5, "id": "boulder_r2_1", "properties": {"interactionType": "push", "pushable": true}},
+    {"type": "door", "x": 1, "y": 4, "id": "door_to_main", "properties": {"interactionType": "transition", "pushable": false, "targetRoomId": "room1", "targetX": 13, "targetY": 4}},
+    {"type": "door", "x": 8, "y": 8, "id": "door_to_room3", "properties": {"interactionType": "transition", "pushable": false, "targetRoomId": "room3", "targetX": 13, "targetY": 8}}
+  ]
+}

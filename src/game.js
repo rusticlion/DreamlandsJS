@@ -1,28 +1,8 @@
 import Phaser from 'phaser';
-import MainScene from './scenes/MainScene';
 import CombatScene from './scenes/CombatScene';
-import Room2Scene from './scenes/Room2Scene';
-
-// Global game state to share data between scenes
-const gameState = {
-  player: {
-    health: 100,
-    bodyParts: [
-      { name: 'Head', status: 'healthy' },
-      { name: 'Arm', status: 'healthy' },
-      { name: 'Leg', status: 'healthy' }
-    ]
-  },
-  currentEnemy: null,
-  combatActive: false,
-  nextPlayerX: null,
-  nextPlayerY: null,
-  callingSceneKey: 'MainScene', // Default scene key for combat
-  rooms: {
-    MainScene: { entities: {} },
-    Room2Scene: { entities: {} }
-  }
-};
+import PreloadScene from './scenes/PreloadScene';
+import RoomScene from './scenes/RoomScene';
+import StateManager from './StateManager';
 
 // Error handling function
 function handleError(error) {
@@ -41,6 +21,12 @@ function handleError(error) {
 }
 
 try {
+  // Initialize StateManager
+  const stateManager = new StateManager();
+  
+  // Try to load existing save data
+  stateManager.loadFromLocalStorage();
+  
   // Game configuration
   const config = {
     type: Phaser.AUTO,
@@ -49,7 +35,7 @@ try {
     parent: 'game-container',
     pixelArt: true, // Enable pixel art mode to prevent anti-aliasing
     backgroundColor: '#000000',
-    scene: [MainScene, CombatScene, Room2Scene],
+    scene: [PreloadScene, RoomScene, CombatScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
@@ -69,10 +55,33 @@ try {
 
   // Initialize the game
   const game = new Phaser.Game(config);
+  
+  // Store stateManager in the game registry for global access
+  game.registry.set('stateManager', stateManager);
 
-  // Add game and gameState to window for debugging
+  // Add game to window for debugging
   window.game = game;
-  window.gameState = gameState;
+  
+  // Auto-save every minute
+  setInterval(() => {
+    stateManager.saveToLocalStorage();
+    console.log('Auto-saving game state...');
+  }, 60000);
+  
+  // Save game state when the window is closed or refreshed
+  window.addEventListener('beforeunload', () => {
+    stateManager.saveToLocalStorage();
+    console.log('Saving game state before unload...');
+  });
+  
+  // Save game state when the user switches tabs
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      stateManager.saveToLocalStorage();
+      console.log('Saving game state when switching away...');
+    }
+  });
+  
 } catch (error) {
   handleError(error);
 }
