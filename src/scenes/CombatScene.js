@@ -14,7 +14,7 @@ class CombatScene extends Phaser.Scene {
     const gameState = window.gameState;
     
     // Store the calling scene key
-    this.callingSceneKey = gameState.callingSceneKey || 'MainScene';
+    this.callingSceneKey = gameState.callingSceneKey || 'RoomScene';
     
     // Reset camera position and setup
     this.cameras.main.setPosition(0, 0);
