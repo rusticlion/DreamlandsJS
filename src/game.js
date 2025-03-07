@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import MainScene from './scenes/MainScene';
 import CombatScene from './scenes/CombatScene';
+import Room2Scene from './scenes/Room2Scene';
 
 // Global game state to share data between scenes
 const gameState = {
@@ -13,7 +14,14 @@ const gameState = {
     ]
   },
   currentEnemy: null,
-  combatActive: false
+  combatActive: false,
+  nextPlayerX: null,
+  nextPlayerY: null,
+  callingSceneKey: 'MainScene', // Default scene key for combat
+  rooms: {
+    MainScene: { entities: {} },
+    Room2Scene: { entities: {} }
+  }
 };
 
 // Error handling function
@@ -41,7 +49,7 @@ try {
     parent: 'game-container',
     pixelArt: true, // Enable pixel art mode to prevent anti-aliasing
     backgroundColor: '#000000',
-    scene: [MainScene, CombatScene],
+    scene: [MainScene, CombatScene, Room2Scene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH

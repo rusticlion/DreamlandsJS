@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { checkHealth, getMessages, getMessagesByLevel, createMessage } from '../api/client';
 
-class MainScene extends Phaser.Scene {
+class Room2Scene extends Phaser.Scene {
   constructor() {
-    super({ key: 'MainScene' });
+    super({ key: 'Room2Scene' });
     this.player = null;
     this.joystick = {
       pointer: null,
@@ -31,24 +31,6 @@ class MainScene extends Phaser.Scene {
     this.createEnemyTexture();
     this.createBoulderTexture();
     this.createDoorTexture();
-  }
-  
-  // Create door texture
-  createDoorTexture() {
-    if (this.textures.exists('door')) return;
-    const size = 16;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#8888ff'; // Blue door
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, size, size);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(6, 2, 4, 12); // Vertical handle
-    this.textures.addCanvas('door', canvas);
   }
   
   // Create enemy texture in a more reliable way
@@ -120,6 +102,24 @@ class MainScene extends Phaser.Scene {
     
     // Create texture from canvas
     this.textures.addCanvas('boulder', canvas);
+  }
+  
+  // Create door texture
+  createDoorTexture() {
+    if (this.textures.exists('door')) return;
+    const size = 16;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#8888ff'; // Blue door
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, size, size);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(6, 2, 4, 12); // Vertical handle
+    this.textures.addCanvas('door', canvas);
   }
 
   create() {
@@ -404,19 +404,13 @@ class MainScene extends Phaser.Scene {
   }
   
   setupEnemies() {
-    // Create enemies at specific positions (using tile-based positions)
-    // Convert tile positions to pixel positions with tileSize (16)
-    // Make sure to position enemies at the center of tiles
+    // Create enemies at specific positions
     const enemyPositions = [
-      { x: 5, y: 3, id: 'enemy1' },
-      { x: 10, y: 7, id: 'enemy2' },
-      { x: 3, y: 7, id: 'enemy3' },
-      // Add one right where player starts for immediate testing
-      // Player starts at tile (1,1), so place enemy at tile (2,2) for testing
-      { x: 2, y: 2, id: 'enemy_test' }
+      { x: 7, y: 4, id: 'enemy_r2_1' },
+      { x: 9, y: 6, id: 'enemy_r2_2' }
     ];
     
-    // Create each enemy directly without physics to avoid any issues
+    // Create each enemy
     enemyPositions.forEach(pos => {
       this.createEntity({
         type: 'enemy',
@@ -434,13 +428,11 @@ class MainScene extends Phaser.Scene {
     this.enemies = this.entities.enemies;
   }
   
-  // Create a boulder at the given grid position
+  // Create boulders at the given grid positions
   setupBoulders() {
-    // Define boulder positions (grid coordinates) - ensuring they're in open areas
+    // Define boulder positions (grid coordinates)
     const boulderPositions = [
-      { x: 4, y: 2, id: 'boulder1' },
-      { x: 8, y: 3, id: 'boulder2' },
-      { x: 6, y: 6, id: 'boulder3' }
+      { x: 5, y: 5, id: 'boulder_r2_1' }
     ];
     
     // Create each boulder
@@ -461,7 +453,7 @@ class MainScene extends Phaser.Scene {
   // Setup doors for room transitions
   setupDoors() {
     const doorPositions = [
-      { x: 13, y: 4, id: 'door_to_room2', targetScene: 'Room2Scene', targetX: 1, targetY: 4 }
+      { x: 1, y: 4, id: 'door_to_main', targetScene: 'MainScene', targetX: 13, targetY: 4 }
     ];
     
     doorPositions.forEach(pos => {
@@ -515,10 +507,10 @@ class MainScene extends Phaser.Scene {
     // Add to master entities list
     this.allEntities.add(entity);
     
-    // Store entity data in gameState if rooms exist
     const sceneName = this.scene.key;
     const gameState = window.gameState;
     
+    // Store entity data in gameState if rooms object exists
     if (gameState.rooms && gameState.rooms[sceneName]) {
       gameState.rooms[sceneName].entities[config.id] = {
         type: config.type,
@@ -548,12 +540,10 @@ class MainScene extends Phaser.Scene {
       // Add collision between player and enemies
       this.physics.add.collider(this.playerContainer, this.enemies);
     }
-  }
-  
-  setupCombatListeners() {
+    
     // Add listeners for the CombatScene events
     this.events.on('resumeFromCombat', (data) => {
-      console.log('MainScene resumed with data:', data);
+      console.log('Room2Scene resumed with data:', data);
       
       // Update scene based on combat results
       if (data && data.victory) {
@@ -565,7 +555,7 @@ class MainScene extends Phaser.Scene {
           this.entities.enemies.remove(this._currentCombatEnemy);
           this.allEntities.remove(this._currentCombatEnemy);
           
-          // Update gameState to mark this enemy as inactive
+          // Update the gameState
           const enemyId = this._currentCombatEnemy.getData('id');
           const sceneName = this.scene.key;
           const gameState = window.gameState;
@@ -653,7 +643,6 @@ class MainScene extends Phaser.Scene {
     const damagedParts = gameState.player.bodyParts.filter(part => part.status === 'damaged');
     if (damagedParts.length > 0) {
       // For now, just tint the player red to indicate damage
-      // In a full implementation, you could change sprites or animations
       if (this.player) {
         this.player.setTint(0xff8888);
       }
@@ -929,13 +918,6 @@ class MainScene extends Phaser.Scene {
     // Store the calling scene key
     gameState.callingSceneKey = this.scene.key;
     
-    // Update gameState to mark this enemy as inactive
-    const sceneName = this.scene.key;
-    if (gameState.rooms && gameState.rooms[sceneName] && 
-        gameState.rooms[sceneName].entities[enemyId]) {
-      gameState.rooms[sceneName].entities[enemyId].active = false;
-    }
-    
     // Show a combat indicator (visual feedback)
     const combatText = this.add.text(
       enemy.x,
@@ -958,6 +940,13 @@ class MainScene extends Phaser.Scene {
       duration: 1000,
       onComplete: () => combatText.destroy()
     });
+    
+    // Update gameState to mark this enemy as inactive if room persistence is implemented
+    const sceneName = this.scene.key;
+    if (gameState.rooms && gameState.rooms[sceneName] && 
+        gameState.rooms[sceneName].entities[enemyId]) {
+      gameState.rooms[sceneName].entities[enemyId].active = false;
+    }
     
     // Pause this scene and start combat scene
     this.scene.pause();
@@ -982,7 +971,7 @@ class MainScene extends Phaser.Scene {
       this.scene.start(targetScene);
     });
   }
-
+  
   update() {
     // Skip all processing if we're moving between tiles
     if (this.isMoving || !this.playerContainer) return;
@@ -1365,11 +1354,8 @@ class MainScene extends Phaser.Scene {
     
     // Get player position from gameState or use default
     const gameState = window.gameState;
-    const tileSize = map.tileWidth;
-    const startTileX = 1;
-    const startTileY = 1;
-    const playerX = gameState.nextPlayerX || (startTileX * tileSize + tileSize/2);
-    const playerY = gameState.nextPlayerY || (startTileY * tileSize + tileSize/2);
+    const playerX = gameState.nextPlayerX || (1 * this.tileSize + this.tileSize/2);
+    const playerY = gameState.nextPlayerY || (1 * this.tileSize + this.tileSize/2);
     
     // Create the player sprite
     this.player = this.physics.add.sprite(0, 0, 'player');
@@ -1394,30 +1380,30 @@ class MainScene extends Phaser.Scene {
   }
   
   createWithManualMap() {
-    console.log("Creating with manual map");
+    console.log("Creating with manual map for Room2");
     
     // Define map dimensions
     const mapWidth = 15;
     const mapHeight = 10;
     const tileSize = 16;
     
-    // Create a simple wall layout (1 = wall, 0 = empty)
+    // Create a simple wall layout for Room2 (1 = wall, 0 = empty)
     const wallData = [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-      [1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-      [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-      [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     ];
     
-    // Create wall and floor graphics
-    const wallColor = 0x663931;
-    const floorColor = 0x73a373;
+    // Create wall and floor graphics with different colors for Room2
+    const wallColor = 0x316639; // Invert colors from MainScene
+    const floorColor = 0x737373; 
     
     // Create the map data
     this.mapData = [];
@@ -1455,10 +1441,8 @@ class MainScene extends Phaser.Scene {
     
     // Get player position from gameState or use default
     const gameState = window.gameState;
-    const startTileX = 1;
-    const startTileY = 1;
-    const playerX = gameState.nextPlayerX || (startTileX * tileSize + tileSize/2);
-    const playerY = gameState.nextPlayerY || (startTileY * tileSize + tileSize/2);
+    const playerX = gameState.nextPlayerX || (1 * tileSize + tileSize/2);
+    const playerY = gameState.nextPlayerY || (1 * tileSize + tileSize/2);
     
     // Create the player sprite
     this.player = this.physics.add.sprite(0, 0, 'player');
@@ -1565,8 +1549,6 @@ class MainScene extends Phaser.Scene {
       this.joystickThumb = null;
     }
   }
-
-//_____Keep this comment to make sure this function is unique in the search_____
   
   movePlayer(direction) {
     if (this.isMoving) return;
@@ -1674,4 +1656,4 @@ class MainScene extends Phaser.Scene {
   }
 }
 
-export default MainScene;
+export default Room2Scene;
