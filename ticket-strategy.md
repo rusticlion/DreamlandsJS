@@ -37,7 +37,7 @@ counting on you to ask me lots of questions and rely on my feedback to
 bring my vision to life. Don't let that stop you from making creative 
 suggestions when they spark for you, though, I love to hear ideas :)
 
-* This document inclues a list of Known Weaknesses below, these are areas 
+* This document includes a list of Known Weaknesses below, these are areas 
 of development where either you or I have struggled in the past. When 
 these elements are in play, bias towards working more closely with me so 
 we can check each others' logic and validate each others' 
